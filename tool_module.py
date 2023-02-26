@@ -76,7 +76,7 @@ def get_all_photo_group(file_name='result.json'):
             if len(g['similar']):
                 new_group = set([g['origin'], ] + g['similar'])
                 # print(new_group, end=" ----- ")
-                if not (new_group in result):
+                if not (new_group in [group for origin, group in result]):
                     # print("True")
                     result.append((g['origin'], new_group))
         return result
