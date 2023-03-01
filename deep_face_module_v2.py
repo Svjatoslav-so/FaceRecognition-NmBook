@@ -73,7 +73,7 @@ def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_
 
 
 def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_name=None, threshold=None,
-                        distance_metric=DISTANCE_METRIC[0]):
+                        distance_metric=DISTANCE_METRIC[0], disable=False):
     """
        Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл result_file
        в формате:
@@ -95,7 +95,7 @@ def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_na
         if not threshold:
             threshold = dst.findThreshold(model_name, distance_metric)
 
-        for current_find_photo in tqdm(data):
+        for current_find_photo in tqdm(data, disable=disable):
             cfp_result = []
             for cfp_encode in current_find_photo.get('encodings'):
                 for other_photo in data:
@@ -212,9 +212,9 @@ if __name__ == '__main__':
 
     # all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory), directory + '/encodings.json',
     #                          model_name=MODELS[8])
-    group_similar_faces(directory + '/dfv2_sface_encodings.json',
-                        directory + '/dfv2_sface_result.json',
-                        model_name=MODELS[8])
+    group_similar_faces(directory + '/dfv2_facenet512_encodings.json',
+                        directory + '/dfv2_facenet512_t(0.2499999999999999)_result.json',
+                        model_name=MODELS[8], threshold=0.2499999999999999)
 
     # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
     #           model_name=MODELS[2])

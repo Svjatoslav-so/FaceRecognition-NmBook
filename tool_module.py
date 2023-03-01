@@ -58,13 +58,13 @@ def get_photo_paths(foto_directory='out'):
 def show_photo(photo_paths):
     """ Открывает фото из списка photo_paths в стандартной утилите отображения """
     images = []
-    for path in tqdm(photo_paths):
+    for path in tqdm(photo_paths, desc='show_photo'):
         img_pil = Image.open(path)
         images.append(img_pil)
         img_pil.show()
 
 
-def get_all_photo_group(file_name='result.json'):
+def get_all_unique_photo_group(file_name='result.json', disable=False):
     """
         Из файла file_name с результатами группировки схожих фото извлекает уникальные группы(в виде множеств путей)
         возвращает список кортежей вида: (фото по которому искалась группа, группа(в виде множеств путей))
@@ -72,7 +72,7 @@ def get_all_photo_group(file_name='result.json'):
     with open(file_name, encoding="utf8") as f:
         group_list = json.load(f)
         result = []
-        for g in tqdm(group_list):
+        for g in tqdm(group_list, disable=disable, desc='get_all_unique_photo_group'):
             if len(g['similar']):
                 new_group = set([g['origin'], ] + g['similar'])
                 # print(new_group, end=" ----- ")
@@ -87,7 +87,7 @@ def show_all_group(file_name='result.json', column=3):
         Отображает уникальные группы фото из файла file_name с результатами группировки схожих фото
         column - количество фото в одной строке
     """
-    for g in tqdm(get_all_photo_group(file_name)):
+    for g in tqdm(get_all_unique_photo_group(file_name), desc='show_all_group'):
         # Создадим фигуру размером 16 на 8 дюйма
         pic_box = plt.figure(figsize=(18, 9))
         # В переменную i записываем номер итерации
@@ -108,6 +108,63 @@ def show_all_group(file_name='result.json', column=3):
         plt.show()
 
 
+def result_analyzer(file_name='result.json', disable=False):
+    """
+        Анализирует уникальные группы фото из файла file_name и возвращает словарь вида:
+            {
+                'count_of_group': количество уникальных групп,
+                'photo_count_list': список количества фото в каждой группе,
+                'error_count_list': список количества ошибок в каждой группе,
+            }
+        ВАЖНО: Для корректной работы метода необходимо чтобы название фото было составлено из имен лиц,
+        изображенных на нем, разделенных &. Если необходим уникальный идентификатор, то он добавляется в конец через _:
+        Например: FaceName1&FaceName2&FaceName3_UniqueId.JPG
+    """
+    unique_groups = get_all_unique_photo_group(file_name, disable=True)
+    num_of_errors_in_groups = []
+    num_of_photos_in_groups = []
+    num_of_correct_in_groups = []
+    for group in tqdm(unique_groups, disable=disable, desc='result_analyzer'):
+        origin_name_start = group[0].rfind("/") + 1
+        origin_face_set = set(group[0][origin_name_start:].split('-')[0].split('&'))
+        # print(origin_face_set, end='\t\t\t')
+        errors = 0
+        for photo in group[1]:
+            photo_name_start = photo.rfind("/") + 1
+            photo_face_set = set(photo[photo_name_start:].split('-')[0].split('&'))
+            # print(f' U {photo_face_set}', end='')
+            if not origin_face_set.intersection(photo_face_set):
+                errors += 1
+        num_of_photos_in_groups.append(len(group[1]))
+        num_of_errors_in_groups.append(errors)
+        # print()
+        num_of_correct_in_groups = list(map(lambda x, y: x-y, num_of_photos_in_groups, num_of_errors_in_groups))
+    report = {
+        'count_of_group': len(unique_groups),
+        'photo_count_list': num_of_photos_in_groups,
+        'error_count_list': num_of_errors_in_groups,
+        'correct_count_list': num_of_correct_in_groups
+    }
+    return report
+
+
+def statistic_analyzer(report):
+    """Расширенная аналитика результатов полученных в методе result_analyzer"""
+    if report['count_of_group'] > 0:
+        return {
+            'max_error_in_group': max(report['error_count_list']),
+            'total_errors': sum(report['error_count_list']),
+            'median_error': sorted(report['error_count_list'])[report['count_of_group'] // 2],
+            'average_error': sum(report['error_count_list'])/report['count_of_group'],
+            'max_correct_in_group': max(report['correct_count_list']),
+            'median_correct': sorted(report['correct_count_list'])[report['count_of_group'] // 2],
+            'average_correct': sum(report['correct_count_list'])/report['count_of_group']
+        }
+    else:
+        return {'max_error_in_group': 0, 'total_errors': 0, 'median_error': 0, 'average_error': 0,
+                'max_correct_in_group': 0, 'median_correct': 0, 'average_correct': 0}
+
+
 if __name__ == '__main__':
     # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_facenet512_result.json'
     # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_openface_result.json'
@@ -115,6 +172,11 @@ if __name__ == '__main__':
     # result_path = 'D:/FOTO/Original photo/Olympus/fr_result.json'
     # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_facenet512_result.json'
     # result_path = '../Test_photo/dfv2_facenet512_result.json'
-    result_path = '../Test_photo/Test_1-Home_photos/dfv2_sface_result.json'
+    result_path = '../Test_photo/Test_1-Home_photos/dfv2_facenet512_t(0.2499999999999999)_result.json'
 
     show_all_group(result_path)
+
+    # model_report = result_analyzer('temp_result.json')
+    # print(model_report)
+    # print(statistic_analyzer(model_report))
+
