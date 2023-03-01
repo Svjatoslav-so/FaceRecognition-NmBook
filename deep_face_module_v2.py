@@ -72,7 +72,7 @@ def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_
         raise Exception(f'File "{file_name}" already exists')
 
 
-def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_name=MODELS[1],
+def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_name=None, threshold=None,
                         distance_metric=DISTANCE_METRIC[0]):
     """
        Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл result_file
@@ -82,12 +82,18 @@ def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_na
            "similar": list[str]    # список схожих файлов
        }
        Сравнение идет по всем лицам которые были распознаны на сравниваемом фото.
-       model_name - должна совпадать с той моделью которая использовалась при создании кодировок
+       model_name - должна совпадать с той моделью которая использовалась при создании кодировок, если model_name задан,
+                    то threshold рассчитывается автоматически на основании model_name и distance_metric.
+       threshold - точность, пороговое значение для расстояния. Лица расстояния между которыми меньше threshold
+                   считаются похожими.
    """
+    if not model_name and not threshold:
+        raise ValueError('model_name or threshold must be specified')
     with Path(encodings_file).open(encoding="utf8") as ef, Path(result_file).open('x', encoding="utf8") as rf:
         data = json.load(ef)
         result = []
-        threshold = dst.findThreshold(model_name, distance_metric)
+        if not threshold:
+            threshold = dst.findThreshold(model_name, distance_metric)
 
         for current_find_photo in tqdm(data):
             cfp_result = []
@@ -199,13 +205,16 @@ if __name__ == '__main__':
     # known_img = 'D:/FOTO/Original photo/Olympus/P9170480.JPG'
     known_img = 'D:/FOTO/Original photo/Olympus/P1011618.JPG'
 
-    directory = 'D:/FOTO/Original photo/Olympus'
+    # directory = 'D:/FOTO/Original photo/Olympus'
     # directory = 'D:/FOTO/Finished photo'
     # directory = 'out/photo'
+    directory = '../Test_photo/Test_1-Home_photos'
 
     # all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory), directory + '/encodings.json',
     #                          model_name=MODELS[8])
-    group_similar_faces(directory + '/dfv2_facenet512_encodings.json', directory + '/dfv2_facenet512_result.json')
+    group_similar_faces(directory + '/dfv2_sface_encodings.json',
+                        directory + '/dfv2_sface_result.json',
+                        model_name=MODELS[8])
 
     # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
     #           model_name=MODELS[2])
@@ -227,5 +236,10 @@ if __name__ == '__main__':
     #           model_name=MODELS[8])
 
     # show_recognized_faces(known_img, DETECTOR_BACKEND[0])
+    # print(
+    #     DeepFace.verify('../Test_photo/Test_1-Home_photos/Arsen-1.JPG',
+    #                     '../Test_photo/Test_1-Home_photos/Varl-4.jpg',
+    #                     detector_backend=DETECTOR_BACKEND[0],
+    #                     model_name=MODELS[0]))
     end_time = time.time()
     print("time in second: ", end_time - start_time, "\ntime in min: ", (end_time - start_time) / 60)

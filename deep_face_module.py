@@ -13,9 +13,9 @@ from deepface import DeepFace
 from tool_module import get_all_file_in_directory
 
 # список самых популярных детекторов лиц
-DETECTOR_BACKEND = ['retinaface', 'mtcnn', 'opencv', 'ssd', 'dlib']
+DETECTOR_BACKEND = ['retinaface', 'mtcnn', 'opencv', 'ssd', 'dlib', 'mediapipe']
 # список самых популярных моделей распознавания лиц
-MODELS = ["VGG-Face", "Facenet", "Facenet512", "OpenFace", "DeepFace", "DeepID", "ArcFace", "Dlib"]
+MODELS = ["VGG-Face", "Facenet", "Facenet512", "OpenFace", "DeepFace", "DeepID", "ArcFace", "Dlib", "SFace"]
 # доступные показатели расстояния
 DISTANCE_METRIC = ['cosine', 'euclidean', 'euclidean_l2']
 
@@ -53,9 +53,11 @@ def group_similar_faces(path_to_photos, result_file='result.json', tolerance=0.4
             current_result = []
             try:
                 for face_results in DeepFace.find(img_path=path, db_path=path_to_photos, model_name=model_name,
-                                                  distance_metric=distance_metric, detector_backend=detector_backend):
+                                                  distance_metric=distance_metric, detector_backend=detector_backend,
+                                                  enforce_detection=False):
                     for r in face_results.values.tolist():
-                        if not(r[0] in current_result) and r[5] < tolerance:
+                        # print(f'{i} - {r[0]} - {r[5]}')
+                        if not(r[0] in current_result) and r[5] < tolerance and not(path == r[0]):
                             current_result.append(r[0])
             except Exception as e:
                 print(e)
@@ -101,7 +103,8 @@ if __name__ == '__main__':
     start_time = time.time()
 
     known_img = 'D:/FOTO/Original photo/Olympus/P9120310.JPG'
-    directory = 'D:/FOTO/Original photo/Olympus'
+    # directory = 'D:/FOTO/Original photo/Olympus'
+    directory = '../Test_photo/Test_1-Home_photos'
 
     # img = Image.open(known_img)
     # fig = plt.figure(figsize=(6, 4))
@@ -109,7 +112,8 @@ if __name__ == '__main__':
     # ax.imshow(img)
     # plt.show()
 
-    group_similar_faces(directory, directory + '/df-result.json', detector_backend=DETECTOR_BACKEND[0])
+    group_similar_faces(directory, directory + '/df_dlib_result.json', model_name=MODELS[7],
+                        detector_backend=DETECTOR_BACKEND[0])
 
     # show_recognized_faces(known_img, DETECTOR_BACKEND[0])
     # find_face(known_img, directory, detector_backend=DETECTOR_BACKEND[0], model_name=MODELS[1])

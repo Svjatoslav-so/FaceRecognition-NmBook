@@ -149,10 +149,11 @@ if __name__ == '__main__':
     # k_img_path = 'D:/FOTO/Original photo/Olympus/P1011618.JPG'
     k_img_path = 'D:/FOTO/Original photo/Olympus/P9170480.JPG'
 
-    img = Image.open(k_img_path)
-    img.show()
+    # img = Image.open(k_img_path)
+    # img.show()
 
-    directory = 'D:/FOTO/Original photo/Olympus'
+    # directory = 'D:/FOTO/Original photo/Olympus'
+    directory = '../Test_photo/Test_1-Home_photos'
     # directory = 'D:/Hobby/NmProject/nmbook_photo/out/photo'
     # directory = 'D:/FOTO/Original photo/Saved Pictures/Фото cкачаные с GooglePhoto'
     # p_paths = get_all_photo_in_directory(directory, '*.jpg')
@@ -164,7 +165,7 @@ if __name__ == '__main__':
         similar_faces = find_similar_faces(k_img_path, directory + '/fr_encodings.json')
         print('Similar faces: ', similar_faces)
         tool_module.show_photo(similar_faces)
-    if False:
+    if True:
         all_fr_encodings_to_file(p_paths, directory + '/fr_encodings.json')
     if True:
         group_similar_faces(directory + '/fr_encodings.json', directory + '/fr_result.json')

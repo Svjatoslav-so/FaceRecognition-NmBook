@@ -113,5 +113,8 @@ if __name__ == '__main__':
     # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_openface_result.json'
     # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_sface_result.json'
     # result_path = 'D:/FOTO/Original photo/Olympus/fr_result.json'
-    result_path = 'D:/FOTO/Original photo/Olympus/dfv2_facenet512_result.json'
+    # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_facenet512_result.json'
+    # result_path = '../Test_photo/dfv2_facenet512_result.json'
+    result_path = '../Test_photo/Test_1-Home_photos/dfv2_sface_result.json'
+
     show_all_group(result_path)
