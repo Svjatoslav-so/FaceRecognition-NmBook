@@ -207,14 +207,15 @@ if __name__ == '__main__':
 
     # directory = 'D:/FOTO/Original photo/Olympus'
     # directory = 'D:/FOTO/Finished photo'
-    # directory = 'out/photo'
-    directory = '../Test_photo/Test_1-Home_photos'
+    directory = 'out/photo'
+    # directory = '../Test_photo/Test_1-Home_photos'
+    # directory = '../Test_photo/Telegram_photo_set'
 
-    # all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory), directory + '/encodings.json',
-    #                          model_name=MODELS[8])
-    group_similar_faces(directory + '/dfv2_facenet512_encodings.json',
-                        directory + '/dfv2_facenet512_t(0.2499999999999999)_result.json',
-                        model_name=MODELS[8], threshold=0.2499999999999999)
+    all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory), directory + '/encodings.json',
+                             model_name=MODELS[0])
+    group_similar_faces(directory + '/dfv2_vgg-face_encodings.json',
+                        directory + '/dfv2_vgg-face_t(0.12499999999999978)_result.json',
+                        threshold=0.12499999999999978)
 
     # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
     #           model_name=MODELS[2])

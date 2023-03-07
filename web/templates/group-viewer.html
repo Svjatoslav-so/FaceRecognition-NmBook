@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Просмотр Групп</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/reset.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
+</head>
+<body>
+    <div class="content">
+        <div class="control_panel">
+            <figure class="origin_figure" id="origin_photo_block">
+                <figcaption>
+                    <p class="person_name"></p>
+                    <p class="document_id">id: </p>    
+                </figcaption>
+                <img src="{{url_for('static', filename='img/origin_photo.png')}}" alt="Искомое фото">
+            </figure>
+            <div class="group_manager">
+                <div class="group_title">
+                    <h3>Группы</h3> <span id="all_group_count">всего: 0</span>
+                </div>
+                <div class="group_list">
+                    <ul id="group_list">
+                    </ul>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="view_panel">
+            <div class="header">
+                <form class="file_loader" method="post" action="{{url_for('open_group_file')}}" id="file_loader">
+                        <input type="text" name="group_file" placeholder="Введите абсолютный путь к файлу с результатами" id="file_input">
+                        <button class="load_btn" type="button" id="load_file_btn">Загрузить</button>
+                </form> 
+            </div>
+            <div class="viewer" id="viewer">
+            </div> 
+        </div>
+    </div>
+
+    <script src="{{url_for('static', filename='js/script.js')}}"></script>
+
+</body>
+</html>

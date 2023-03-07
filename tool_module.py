@@ -67,19 +67,27 @@ def show_photo(photo_paths):
 def get_all_unique_photo_group(file_name='result.json', disable=False):
     """
         Из файла file_name с результатами группировки схожих фото извлекает уникальные группы(в виде множеств путей)
-        возвращает список кортежей вида: (фото по которому искалась группа, группа(в виде множеств путей))
+        возвращает список словарей вида: {
+            'origin': фото по которому искалась группа,
+            'group': группа(в виде списка путей (origin+similar)))
+        }
     """
-    with open(file_name, encoding="utf8") as f:
-        group_list = json.load(f)
-        result = []
-        for g in tqdm(group_list, disable=disable, desc='get_all_unique_photo_group'):
-            if len(g['similar']):
-                new_group = set([g['origin'], ] + g['similar'])
-                # print(new_group, end=" ----- ")
-                if not (new_group in [group for origin, group in result]):
-                    # print("True")
-                    result.append((g['origin'], new_group))
-        return result
+    result = []
+    if os.path.exists(file_name):
+        with open(file_name, encoding="utf8") as f:
+            group_list = json.load(f)
+
+            try:
+                for g in tqdm(group_list, disable=disable, desc='get_all_unique_photo_group'):
+                    if len(g['similar']):
+                        new_group = set([g['origin'], ] + g['similar'])
+                        # print(new_group, end=" ----- ")
+                        if not (new_group in [group for origin, group in result]):
+                            # print("True")
+                            result.append((g['origin'], new_group))
+            except Exception as e:
+                print(f'Error: in tool_module => get_all_unique_photo_group\n\t{e}')
+    return list(map(lambda x: {'origin': x[0], 'group': list(x[1])}, result))
 
 
 def show_all_group(file_name='result.json', column=3):
@@ -91,13 +99,13 @@ def show_all_group(file_name='result.json', column=3):
         # Создадим фигуру размером 16 на 8 дюйма
         pic_box = plt.figure(figsize=(18, 9))
         # В переменную i записываем номер итерации
-        for i, path in enumerate(g[1]):
+        for i, path in enumerate(g['group']):
             try:
                 # считываем изображение в picture
                 picture = np.asarray(Image.open(path))
                 # добавляем ячейку в pix_box для вывода текущего изображения
-                pic_box.add_subplot(math.ceil(len(g[1]) / column), column, i + 1)
-                if path == g[0]:
+                pic_box.add_subplot(math.ceil(len(g['group']) / column), column, i + 1)
+                if path == g['origin']:
                     plt.title(label="Origin", loc="center")
                 plt.imshow(picture)
                 # отключаем отображение осей
@@ -117,25 +125,25 @@ def result_analyzer(file_name='result.json', disable=False):
                 'error_count_list': список количества ошибок в каждой группе,
             }
         ВАЖНО: Для корректной работы метода необходимо чтобы название фото было составлено из имен лиц,
-        изображенных на нем, разделенных &. Если необходим уникальный идентификатор, то он добавляется в конец через _:
-        Например: FaceName1&FaceName2&FaceName3_UniqueId.JPG
+        изображенных на нем, разделенных &. Если необходим уникальный идентификатор, то он добавляется в конец через -:
+        Например: FaceName1&FaceName2&FaceName3-UniqueId.JPG
     """
     unique_groups = get_all_unique_photo_group(file_name, disable=True)
     num_of_errors_in_groups = []
     num_of_photos_in_groups = []
     num_of_correct_in_groups = []
     for group in tqdm(unique_groups, disable=disable, desc='result_analyzer'):
-        origin_name_start = group[0].rfind("/") + 1
-        origin_face_set = set(group[0][origin_name_start:].split('-')[0].split('&'))
+        origin_name_start = group['origin'].rfind("/") + 1
+        origin_face_set = set(group['origin'][origin_name_start:].split('-')[0].split('&'))
         # print(origin_face_set, end='\t\t\t')
         errors = 0
-        for photo in group[1]:
+        for photo in group['group']:
             photo_name_start = photo.rfind("/") + 1
             photo_face_set = set(photo[photo_name_start:].split('-')[0].split('&'))
             # print(f' U {photo_face_set}', end='')
             if not origin_face_set.intersection(photo_face_set):
                 errors += 1
-        num_of_photos_in_groups.append(len(group[1]))
+        num_of_photos_in_groups.append(len(group['group']))
         num_of_errors_in_groups.append(errors)
         # print()
         num_of_correct_in_groups = list(map(lambda x, y: x-y, num_of_photos_in_groups, num_of_errors_in_groups))
@@ -169,10 +177,19 @@ if __name__ == '__main__':
     # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_facenet512_result.json'
     # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_openface_result.json'
     # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_sface_result.json'
-    # result_path = 'D:/FOTO/Original photo/Olympus/fr_result.json'
+    # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_sface_t(0.32499999999999996)_result.json'
+    # result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_dlib_t(0.02499999999999969)_result.json'
+    result_path = 'D:/Hobby/NmProject/nmbook_photo/out/photo/dfv2_facenet512_t(0.2499999999999999)_result.json'
+    # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_facenet512_t(0.2499999999999999)_result.json'
+    # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_sface_t(0.32499999999999996)_result.json'
+    # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_vgg-face_t(0.12499999999999978)_result.json'
+    # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_dlib_t(0.02499999999999969)_result.json'
+    # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_facenet512_result.json'
     # result_path = 'D:/FOTO/Original photo/Olympus/dfv2_facenet512_result.json'
     # result_path = '../Test_photo/dfv2_facenet512_result.json'
-    result_path = '../Test_photo/Test_1-Home_photos/dfv2_facenet512_t(0.2499999999999999)_result.json'
+    # result_path = '../Test_photo/Test_1-Home_photos/dfv2_facenet512_t(0.2499999999999999)_result.json'
+    # result_path = '../Test_photo/Telegram_photo_set/dfv2_sface_t(0.32499999999999996)_result.json'
+    # result_path = '../Test_photo/Telegram_photo_set/dfv2_facenet512_t(0.2499999999999999)_result.json'
 
     show_all_group(result_path)
 
