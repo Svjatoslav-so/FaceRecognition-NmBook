@@ -9,6 +9,9 @@ let load_btm = document.getElementById('load_file_btn');
 let groupsList;
 let metadata;
 
+const options = { click: "toggleCover" };
+
+
 let getPhotoName = function(path){
     return path.split(/\\\\|\//).reverse()[0];
 }
@@ -18,13 +21,16 @@ let originPhotoShow = function(index=0){
         let origin_path = groupsList[index]['origin'];
         let filename = getPhotoName(origin_path);
         originPhotoBlock.innerHTML = `
-        <figcaption>
+        <div class="caption">
             <p class="person_name">${filename.slice(0,10)} . . . ${filename.slice(30)}<br>${metadata['by_photo'][filename]['title']}</p>
             <p class="document_id">id: ${metadata['by_photo'][getPhotoName(origin_path)]['docs']}</p>    
-        </figcaption>
-        <img src="static/${origin_path}" alt="Искомое фото">`;
+        </div>
+        <div class="f-panzoom">
+            <img class="f-panzoom__content" src="static/${origin_path}" alt="Искомое фото">
+        </div>`;
+        originPhotoContainer = document.querySelector("#origin_photo_block .f-panzoom");
+        new Panzoom(originPhotoContainer, options);
     }
-    // ${getPhotoName(origin_path)}<br>
 }
 
 let groupMenuShow = function(active=0){
@@ -46,15 +52,25 @@ let groupShow = function(index=0){
     for(let i = 0; i < groupsList[index]['group'].length; i++){
         let path = groupsList[index]['group'][i];
         let filename = getPhotoName(path);
-        let newSimilarPhoto = document.createElement('figure');
+        let newSimilarPhoto = document.createElement('div');
         newSimilarPhoto.className = 'similar_figure';
         newSimilarPhoto.innerHTML = `
-        <figcaption>
+        <div class="caption">
             <p class="person_name">${filename.slice(0,10)} . . . ${filename.slice(30)}<br>${metadata['by_photo'][filename]['title']}</p>
             <p class="document_id">id: ${metadata['by_photo'][getPhotoName(path)]['docs']}</p>    
-        </figcaption>
-        <img src="static/${path}" alt="Схожее фото">`;
+        </div>
+        <div class="f-panzoom">
+            <img class="f-panzoom__content" src="static/${path}" alt="Схожее фото">
+        </div>`;
         viewer.appendChild(newSimilarPhoto);
+    }
+        activatePanzoom();
+}
+
+let activatePanzoom = function(){
+    const containers = document.querySelectorAll(".similar_figure .f-panzoom");
+    for(let i = 0;  i < containers.length; i++){
+        new Panzoom(containers[i], options);
     }
 }
 
@@ -68,7 +84,6 @@ let fileShow = function(Request){
     originPhotoShow();
     groupMenuShow();
     groupShow();
-
 }
 
 let chooseGroup = function(){

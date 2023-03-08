@@ -5,18 +5,21 @@
     <title>Просмотр Групп</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="{{url_for('static', filename='css/reset.css')}}">
+    <link  rel="stylesheet"  href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.css">
     <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
 </head>
 <body>
     <div class="content">
         <div class="control_panel">
-            <figure class="origin_figure" id="origin_photo_block">
-                <figcaption>
+            <div class="origin_figure" id="origin_photo_block">
+                <div class="caption">
                     <p class="person_name"></p>
                     <p class="document_id">id: </p>    
-                </figcaption>
-                <img src="{{url_for('static', filename='img/origin_photo.png')}}" alt="Искомое фото">
-            </figure>
+                </div>
+                <div>
+                    <img src="{{url_for('static', filename='img/origin_photo.png')}}" alt="Искомое фото">
+                </div>
+            </div>
             <div class="group_manager">
                 <div class="group_title">
                     <h3>Группы</h3> <span id="all_group_count">всего: 0</span>
@@ -41,6 +44,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.umd.js"></script>
     <script src="{{url_for('static', filename='js/script.js')}}"></script>
 
 </body>
