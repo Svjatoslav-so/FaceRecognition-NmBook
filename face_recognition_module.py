@@ -51,8 +51,11 @@ def all_fr_encodings_to_file(paths_to_photos, file_name='encodings.json'):
     """
         Записывает кодировки лиц(face_recognition) для всех фото из paths_to_photos в файл file_name в формате json:
         {
-            "path": str,
-            "encodings": list[list]
+            "path": str(путь к файлу),
+            "faces": {
+                "face_area": (список координат лица),
+                "encoding": (вектор кодировки лица)
+            }
         }
     """
     if not os.path.exists(file_name):
@@ -65,7 +68,9 @@ def all_fr_encodings_to_file(paths_to_photos, file_name='encodings.json'):
                 img_encodings = face_recognition.face_encodings(img, known_face_locations=known_face_locations,
                                                                 model='large')
                 data.append({"path": str(path),
-                             "encodings": [e.tolist() for e in img_encodings]})
+                             "faces": list(map(lambda fa, e: {"face_area": fa, "encoding": e.tolist()},
+                                               known_face_locations,
+                                               img_encodings))})
                 print(f"{i}/{path}")
                 i += 1
             json.dump(data, f, indent=4)
@@ -77,10 +82,14 @@ def group_similar_faces(encodings_file='encodings.json', result_file='result.jso
     """
         Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл result_file
         в формате:
-        {
-            "origin": str,          # сравниваемый файл
-            "similar": list[str]    # список схожих файлов
-        }
+         {
+           "origin": str(путь к искомому фото), # сравниваемое фото
+           "similar": list[{"path": str(путь к найденному фото),
+                           "face_areas": {
+                               "origin": list(список координат лица из искомого фото),
+                               "similar": list(список координат лица из найденного фото)}
+                           }]    # список схожих фото
+         }
         Сравнение идет по всем лицам которые были распознаны на сравниваемом фото
         tolerance - точность, чем меньше тем точнее
     """
@@ -91,15 +100,17 @@ def group_similar_faces(encodings_file='encodings.json', result_file='result.jso
         for c_p_data in tqdm(data):
             print(f"{i} {c_p_data.get('path')}")
             c_p_result = []
-            for c_p_encode in c_p_data.get('encodings'):
-                for same_encode in data:
-                    if not (same_encode.get('path') in c_p_result) and len(same_encode.get('encodings')) and not (
-                            same_encode.get('path') == c_p_data.get('path')):
-                        comparison_result = face_recognition.compare_faces(c_p_encode,
-                                                                           np.array(same_encode.get('encodings')),
+            for c_p_face in c_p_data.get('faces'):
+                for same_data in data:
+                    if not (same_data.get('path') in c_p_result) and len(same_data.get('faces')) and not (
+                            same_data.get('path') == c_p_data.get('path')):
+                        comparison_result = face_recognition.compare_faces(c_p_face.get('encoding'),
+                                                                           np.array([f.get('encoding') for f in
+                                                                                     same_data.get('faces')]),
                                                                            tolerance=tolerance)
                         if True in comparison_result:
-                            c_p_result.append(same_encode.get('path'))
+                            c_p_result.append({"path": same_data.get('path'),
+                                               "face_areas": {"origin": c_p_face.get('face_area'), "similar": None}})
             result.append({"origin": c_p_data.get('path'),
                            "similar": c_p_result})
             i += 1
@@ -122,12 +133,13 @@ def find_similar_faces(known_img_path, encodings_file='encodings.json', toleranc
             for known_encode in tqdm(known_img_encodes):
                 for d in all_data:
                     # print(f"{i} {d.get('path')}", end=" - ")
-                    if len(d.get('encodings')) > 0:
+                    if len(d.get('faces')) > 0:
                         comparison_result = face_recognition.compare_faces(known_encode,
-                                                                           np.array(d.get('encodings')),
+                                                                           np.array([f.get('encoding') for f in
+                                                                                     d.get('faces')]),
                                                                            tolerance=tolerance)
                         # print(comparison_result)
-                        if True in comparison_result and not (d.get('path') in result_photo_paths)\
+                        if True in comparison_result and not (d.get('path') in result_photo_paths) \
                                 and not (Path(d.get('path')) == Path(known_img_path)):
                             result_photo_paths.append(d.get('path'))
                         else:
@@ -147,13 +159,15 @@ if __name__ == '__main__':
     # k_img_path = 'D:/FOTO/Original photo/Olympus/P7200154.JPG'
     # k_img_path = 'D:/FOTO/Original photo/Olympus/P5111402.JPG'
     # k_img_path = 'D:/FOTO/Original photo/Olympus/P1011618.JPG'
-    k_img_path = 'D:/FOTO/Original photo/Olympus/P9170480.JPG'
+    # k_img_path = 'D:/FOTO/Original photo/Olympus/P9170480.JPG'
+    # k_img_path = 'D:/FOTO/Original photo/Moto/photo_2021-08-13_21-37-01.jpg'
 
     # img = Image.open(k_img_path)
     # img.show()
 
     # directory = 'D:/FOTO/Original photo/Olympus'
     directory = '../Test_photo/Test_1-Home_photos'
+    # directory = 'D:/FOTO/Original photo/Moto'
     # directory = 'D:/Hobby/NmProject/nmbook_photo/out/photo'
     # directory = 'D:/FOTO/Original photo/Saved Pictures/Фото cкачаные с GooglePhoto'
     # p_paths = get_all_photo_in_directory(directory, '*.jpg')

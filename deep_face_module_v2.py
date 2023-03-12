@@ -27,7 +27,14 @@ DISTANCE_METRIC = ['cosine', 'euclidean', 'euclidean_l2']
 def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_name=MODELS[1],
                              detector_backend=DETECTOR_BACKEND[0], enforce_detection=True):
     """
-        Записывает кодировки лиц(deepface) для всех фото из paths_to_photos в файл file_name в формате json
+        Записывает кодировки лиц(deepface) для всех фото из paths_to_photos в файл file_name в формате json:
+        {
+            "path": str(путь к файлу),
+            "faces": {
+                "face_area": (список координат лица),
+                "encoding": (вектор кодировки лица)
+                }
+        }
     """
     name_start = file_name.rfind("/") + 1
     file_name = file_name[:name_start] + f'dfv2_{model_name.lower()}_{file_name[name_start:]}'
@@ -47,7 +54,7 @@ def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_
                                                            enforce_detection=enforce_detection,
                                                            align=align
                                                            )
-                        img_encodings = []
+                        img_faces = []
                         for img_content, img_region, img_confidence in img_objs:
                             embedding_obj = DeepFace.represent(img_path=img_content
                                                                , model_name=model_name
@@ -56,14 +63,17 @@ def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_
                                                                , align=align
                                                                , normalization='base'
                                                                )
-
-                            img_representation = embedding_obj[0]["embedding"]
-                            img_encodings.append(img_representation)
+                            face_representation = {"face_area": (img_region['y'],
+                                                                 img_region['x'] + img_region['w'],
+                                                                 img_region['y'] + img_region['h'],
+                                                                 img_region['x']),
+                                                   "encoding": embedding_obj[0]["embedding"]}
+                            img_faces.append(face_representation)
                     except ValueError as ve:
                         print(ve)
-                        img_encodings = []
-                    data.append({"path": str(path),
-                                 "encodings": img_encodings})
+                        img_faces = []
+                    data.append({"path": path,
+                                 "faces": img_faces})
 
             json.dump(data, f, indent=4)
             return data
@@ -78,8 +88,12 @@ def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_na
        Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл result_file
        в формате:
        {
-           "origin": str,          # сравниваемый файл
-           "similar": list[str]    # список схожих файлов
+           "origin": str(путь к искомому фото), # сравниваемое фото
+           "similar": list[{"path": str(путь к найденному фото),
+                           "face_areas": {
+                               "origin": list(список координат лица из искомого фото),
+                               "similar": list(список координат лица из найденного фото)}
+                           }]    # список схожих фото
        }
        Сравнение идет по всем лицам которые были распознаны на сравниваемом фото.
        model_name - должна совпадать с той моделью которая использовалась при создании кодировок, если model_name задан,
@@ -97,24 +111,31 @@ def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_na
 
         for current_find_photo in tqdm(data, disable=disable):
             cfp_result = []
-            for cfp_encode in current_find_photo.get('encodings'):
+            for cfp_face in current_find_photo.get('faces'):
                 for other_photo in data:
-                    if not (other_photo.get('path') in cfp_result) and len(other_photo.get('encodings')) and not (
-                            other_photo.get('path') == current_find_photo.get('path')):
-                        for other_encode in other_photo.get('encodings'):
+                    if not (other_photo.get('path') in cfp_result) \
+                            and len(other_photo.get('faces')) \
+                            and not (other_photo.get('path') == current_find_photo.get('path')):
+                        for other_face in other_photo.get('faces'):
                             if distance_metric == 'cosine':
-                                distance = dst.findCosineDistance(cfp_encode, other_encode)
+                                distance = dst.findCosineDistance(cfp_face.get('encoding'),
+                                                                  other_face.get('encoding'))
                             elif distance_metric == 'euclidean':
-                                distance = dst.findEuclideanDistance(cfp_encode, other_encode)
+                                distance = dst.findEuclideanDistance(cfp_face.get('encoding'),
+                                                                     other_face.get('encoding'))
                             elif distance_metric == 'euclidean_l2':
-                                distance = dst.findEuclideanDistance(dst.l2_normalize(cfp_encode),
-                                                                     dst.l2_normalize(other_encode))
+                                distance = dst.findEuclideanDistance(dst.l2_normalize(cfp_face.get('encoding')),
+                                                                     dst.l2_normalize(other_face.get('encoding')))
                             else:
                                 raise ValueError("Invalid distance_metric passed - ", distance_metric)
 
                             comparison_result = distance <= threshold
                             if comparison_result:
-                                cfp_result.append(other_photo.get('path'))
+                                cfp_result.append({"path": other_photo.get('path'),
+                                                   "face_areas": {
+                                                       "origin": cfp_face.get('face_area'),
+                                                       "similar": other_face.get('face_area')}
+                                                   })
                                 break
 
             result.append({"origin": current_find_photo.get('path'),
@@ -163,16 +184,16 @@ def find_face(k_img, encodings_file, need_show=True, model_name=MODELS[1], detec
 
         for cfp_encode in tqdm(img_encodings):
             for other_photo in data:
-                if not (other_photo.get('path') in result) and len(other_photo.get('encodings')) and not (
+                if not (other_photo.get('path') in result) and len(other_photo.get('faces')) and not (
                         other_photo.get('path') == k_img):
-                    for other_encode in other_photo.get('encodings'):
+                    for other_face in other_photo.get('faces'):
                         if distance_metric == 'cosine':
-                            distance = dst.findCosineDistance(cfp_encode, other_encode)
+                            distance = dst.findCosineDistance(cfp_encode, other_face.get('encoding'))
                         elif distance_metric == 'euclidean':
-                            distance = dst.findEuclideanDistance(cfp_encode, other_encode)
+                            distance = dst.findEuclideanDistance(cfp_encode, other_face.get('encoding'))
                         elif distance_metric == 'euclidean_l2':
                             distance = dst.findEuclideanDistance(dst.l2_normalize(cfp_encode),
-                                                                 dst.l2_normalize(other_encode))
+                                                                 dst.l2_normalize(other_face.get('encoding')))
                         else:
                             raise ValueError("Invalid distance_metric passed - ", distance_metric)
 
@@ -194,6 +215,7 @@ def find_face(k_img, encodings_file, need_show=True, model_name=MODELS[1], detec
 def show_recognized_faces(img, detector_backend):
     """Выводит на экран лица распознанные на фото img детектором лиц detector_backend"""
     for ef in DeepFace.extract_faces(img, detector_backend=detector_backend):
+        # print(ef)
         Image.fromarray((ef['face'] * 255).astype(np.uint8)).show()
 
 
@@ -203,19 +225,21 @@ if __name__ == '__main__':
 
     # known_img = 'D:/FOTO/Original photo/Olympus/P720/0154.JPG'
     # known_img = 'D:/FOTO/Original photo/Olympus/P9170480.JPG'
-    known_img = 'D:/FOTO/Original photo/Olympus/P1011618.JPG'
+    # known_img = 'D:/FOTO/Original photo/Olympus/P1011618.JPG'
+    # known_img = 'D:/FOTO/Original photo/Moto/photo_2021-08-13_21-37-01.jpg'
 
     # directory = 'D:/FOTO/Original photo/Olympus'
     # directory = 'D:/FOTO/Finished photo'
-    directory = 'out/photo'
-    # directory = '../Test_photo/Test_1-Home_photos'
+    # directory = 'out/photo'
+    # directory = 'D:/FOTO/Original photo/Moto'
+    directory = '../Test_photo/Test_1-Home_photos'
     # directory = '../Test_photo/Telegram_photo_set'
 
     all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory), directory + '/encodings.json',
-                             model_name=MODELS[0])
-    group_similar_faces(directory + '/dfv2_vgg-face_encodings.json',
-                        directory + '/dfv2_vgg-face_t(0.12499999999999978)_result.json',
-                        threshold=0.12499999999999978)
+                             model_name=MODELS[2])
+    group_similar_faces(directory + '/dfv2_facenet512_encodings.json',
+                        directory + '/dfv2_facenet512(0.2499999999999999)_result.json',
+                        threshold=0.2499999999999999)
 
     # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
     #           model_name=MODELS[2])
