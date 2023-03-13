@@ -23,10 +23,10 @@ let originPhotoShow = function(index=0){
         originPhotoBlock.innerHTML = `
         <div class="caption">
             <p class="person_name">${filename.slice(0,10)} . . . ${filename.slice(30)}<br>${metadata['by_photo'][filename]['title']}</p>
-            <p class="document_id">id: ${metadata['by_photo'][getPhotoName(origin_path)]['docs']}</p>    
+            <p class="document_id">id: ${metadata['by_photo'][filename]['docs']}</p>
         </div>
         <div class="f-panzoom">
-            <img class="f-panzoom__content" src="static/${origin_path}" alt="Искомое фото">
+            <img class="f-panzoom__content" src="/img_show/${origin_path}" alt="Искомое фото">
         </div>`;
         originPhotoContainer = document.querySelector("#origin_photo_block .f-panzoom");
         new Panzoom(originPhotoContainer, options);
@@ -40,7 +40,7 @@ let groupMenuShow = function(active=0){
         newGroupLi.className = `group_li ${i==active ? "active" : ""}`;
         newGroupLi.innerHTML=`
         <p>Группа ${i+1}</p>
-        <p>${groupsList[i]['group'].length} фото</p>`;
+        <p>${groupsList[i]['similar'].length} фото</p>`;
         newGroupLi.dataset.group_id = i;
         newGroupLi.onclick =chooseGroup;
         groupMenu.appendChild(newGroupLi);
@@ -49,8 +49,8 @@ let groupMenuShow = function(active=0){
 
 let groupShow = function(index=0){
     viewer.innerHTML = "";
-    for(let i = 0; i < groupsList[index]['group'].length; i++){
-        let path = groupsList[index]['group'][i];
+    for(let i = 0; i < groupsList[index]['similar'].length; i++){
+        let path = groupsList[index]['similar'][i]['path'];
         let filename = getPhotoName(path);
         let newSimilarPhoto = document.createElement('div');
         newSimilarPhoto.className = 'similar_figure';
@@ -60,7 +60,7 @@ let groupShow = function(index=0){
             <p class="document_id">id: ${metadata['by_photo'][getPhotoName(path)]['docs']}</p>    
         </div>
         <div class="f-panzoom">
-            <img class="f-panzoom__content" src="static/${path}" alt="Схожее фото">
+            <img class="f-panzoom__content" src="/img_show/${path}" alt="Схожее фото">
         </div>`;
         viewer.appendChild(newSimilarPhoto);
     }
