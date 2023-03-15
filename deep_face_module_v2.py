@@ -25,98 +25,41 @@ MODELS = ["VGG-Face", "Facenet", "Facenet512", "OpenFace", "DeepFace", "DeepID",
 DISTANCE_METRIC = ['cosine', 'euclidean', 'euclidean_l2']
 
 
-def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_name=MODELS[1],
-                             detector_backend=DETECTOR_BACKEND[0], enforce_detection=True):
-    """
-        Записывает кодировки лиц(deepface) для всех фото из paths_to_photos в файл file_name в формате json:
-        {
-            "path": str(путь к файлу),
-            "faces": {
-                "face_area": (список координат лица),
-                "encoding": (вектор кодировки лица)
-                }
-        }
-    """
-    name_start = file_name.rfind("/") + 1
-    file_name = file_name[:name_start] + f'dfv2_{model_name.lower()}_{file_name[name_start:]}'
-    if not os.path.exists(file_name):
-        with Path(file_name).open('x', encoding="utf8") as f:
-            data = []
-            target_size = functions.find_target_size(model_name=model_name)
-            align = True
-            not_detected_face_list = []
-            for path in tqdm(paths_to_photos):
-                if os.path.exists(path):
-                    try:
-                        img_objs = functions.extract_faces(img=path,
-                                                           target_size=target_size,
-                                                           detector_backend=detector_backend,
-                                                           grayscale=False,
-                                                           enforce_detection=enforce_detection,
-                                                           align=align
-                                                           )
-                        img_faces = []
-                        for img_content, img_region, img_confidence in img_objs:
-                            embedding_obj = DeepFace.represent(img_path=img_content
-                                                               , model_name=model_name
-                                                               , enforce_detection=enforce_detection
-                                                               , detector_backend="skip"
-                                                               , align=align
-                                                               , normalization='base'
-                                                               )
-                            face_representation = {"face_area": (img_region['y'],
-                                                                 img_region['x'] + img_region['w'],
-                                                                 img_region['y'] + img_region['h'],
-                                                                 img_region['x']),
-                                                   "encoding": embedding_obj[0]["embedding"]}
-                            img_faces.append(face_representation)
-                    except ValueError as ve:
-                        print(ve)
-                        not_detected_face_list.append(path)
-                        img_faces = []
-                    data.append({"path": path,
-                                 "faces": img_faces})
-
-            json.dump(data, f, indent=4)
-            with open('not_detected_face_list.json', 'w', encoding='utf8') as lf:
-                json.dump(not_detected_face_list, lf, indent=3)
-            return data
-
-    else:
-        raise Exception(f'File "{file_name}" already exists')
-
-
-def _encoding_process(paths, queue, model_name, target_size, detector_backend, enforce_detection, align, disable):
-    """ Функция выполняемая отдельными процессами в all_df_encodings_to_file_parallel """
+def _encoding_process(paths, queue, model_name, target_size, detector_backends, enforce_detection, align, disable):
+    """ Функция выполняемая отдельными процессами в all_df_encodings_to_file """
     data = []
     for path in tqdm(paths, disable=disable):
         if os.path.exists(path):
-            try:
-                img_objs = functions.extract_faces(img=path,
-                                                   target_size=target_size,
-                                                   detector_backend=detector_backend,
-                                                   grayscale=False,
-                                                   enforce_detection=enforce_detection,
-                                                   align=align
+            img_objs = []
+            for d_backend in detector_backends:
+                try:
+                    img_objs = functions.extract_faces(img=path,
+                                                       target_size=target_size,
+                                                       detector_backend=d_backend,
+                                                       grayscale=False,
+                                                       enforce_detection=enforce_detection,
+                                                       align=align)
+                    break
+                except ValueError as ve:
+                    img_objs = []
+                    if d_backend == detector_backends[-1]:
+                        print(f'{ve} Photo: {path}')
+
+            img_faces = []
+            for img_content, img_region, img_confidence in img_objs:
+                embedding_obj = DeepFace.represent(img_path=img_content
+                                                   , model_name=model_name
+                                                   , enforce_detection=enforce_detection
+                                                   , detector_backend="skip"
+                                                   , align=align
+                                                   , normalization='base'
                                                    )
-                img_faces = []
-                for img_content, img_region, img_confidence in img_objs:
-                    embedding_obj = DeepFace.represent(img_path=img_content
-                                                       , model_name=model_name
-                                                       , enforce_detection=enforce_detection
-                                                       , detector_backend="skip"
-                                                       , align=align
-                                                       , normalization='base'
-                                                       )
-                    face_representation = {"face_area": (img_region['y'],
-                                                         img_region['x'] + img_region['w'],
-                                                         img_region['y'] + img_region['h'],
-                                                         img_region['x']),
-                                           "encoding": embedding_obj[0]["embedding"]}
-                    img_faces.append(face_representation)
-            except ValueError as ve:
-                print(ve)
-                img_faces = []
+                face_representation = {"face_area": (img_region['y'],
+                                                     img_region['x'] + img_region['w'],
+                                                     img_region['y'] + img_region['h'],
+                                                     img_region['x']),
+                                       "encoding": embedding_obj[0]["embedding"]}
+                img_faces.append(face_representation)
             data.append({"path": path,
                          "faces": img_faces})
     queue.put(data)  # проблемное место, если вызывать join() перед извлечением данных из queue (get()).
@@ -125,9 +68,9 @@ def _encoding_process(paths, queue, model_name, target_size, detector_backend, e
     # print("@Encoding_process end!!!")
 
 
-def all_df_encodings_to_file_parallel(paths_to_photos, file_name='encodings.json', model_name=MODELS[1],
-                                      detector_backend=DETECTOR_BACKEND[0], enforce_detection=True, process_count=None,
-                                      disable=False):
+def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_name=MODELS[1],
+                             detector_backends=None, enforce_detection=True, process_count=None,
+                             disable=False):
     """
         Записывает кодировки лиц(deepface) для всех фото из paths_to_photos в файл file_name в формате json:
         {
@@ -138,13 +81,16 @@ def all_df_encodings_to_file_parallel(paths_to_photos, file_name='encodings.json
                 }
         }
         model_name - модель используемая для получения кодировки лица.
-        detector_backend - детектор распознавания лиц.
+        detector_backends - список детекторов распознавания лиц. Если не сработает первый, пробуем следующий.
+                            Если None, то по умолчанию используются ['retinaface', 'mtcnn'].
         enforce_detection - если False, то для фото без лица не будет выбрасываться ошибка.
         process_count - количество процессов для расчета. (Введенное значение может быть автоматически изменено).
                        По умолчанию None - определяется автоматически(равно количеству логических ядер).
                        (Оптимальное количество 4).
         disable - если True, то прогресс-бар будет отключен.
     """
+    if detector_backends is None:
+        detector_backends = ['retinaface', 'mtcnn']
     name_start = file_name.rfind("/") + 1
     file_name = file_name[:name_start] + f'dfv2_{model_name.lower()}_{file_name[name_start:]}'
     if not os.path.exists(file_name):
@@ -165,7 +111,7 @@ def all_df_encodings_to_file_parallel(paths_to_photos, file_name='encodings.json
                                                                     'queue': queue,
                                                                     'model_name': model_name,
                                                                     'target_size': target_size,
-                                                                    'detector_backend': detector_backend,
+                                                                    'detector_backends': detector_backends,
                                                                     'enforce_detection': enforce_detection,
                                                                     'align': align,
                                                                     'disable': disable}))
@@ -182,71 +128,8 @@ def all_df_encodings_to_file_parallel(paths_to_photos, file_name='encodings.json
         raise Exception(f'File "{file_name}" already exists')
 
 
-def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_name=None, threshold=None,
-                        distance_metric=DISTANCE_METRIC[0], disable=False):
-    """
-       Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл result_file
-       в формате:
-       {
-           "origin": str(путь к искомому фото), # сравниваемое фото
-           "similar": list[{"path": str(путь к найденному фото),
-                           "face_areas": {
-                               "origin": list(список координат лица из искомого фото),
-                               "similar": list(список координат лица из найденного фото)}
-                           }]    # список схожих фото
-       }
-       Сравнение идет по всем лицам которые были распознаны на сравниваемом фото.
-       model_name - должна совпадать с той моделью которая использовалась при создании кодировок, если model_name задан,
-                    то threshold рассчитывается автоматически на основании model_name и distance_metric.
-       threshold - точность, пороговое значение для расстояния. Лица расстояния между которыми меньше threshold
-                   считаются похожими.
-       distance_metric - метрика используемая для расчета расстояния между кодировками лиц.
-       disable - если True, то прогресс-бар будет отключен.
-   """
-    if not model_name and not threshold:
-        raise ValueError('model_name or threshold must be specified')
-    with Path(encodings_file).open(encoding="utf8") as ef, Path(result_file).open('x', encoding="utf8") as rf:
-        data = json.load(ef)
-        result = []
-        if not threshold:
-            threshold = dst.findThreshold(model_name, distance_metric)
-
-        for current_find_photo in tqdm(data, disable=disable):
-            cfp_result = []
-            for cfp_face in current_find_photo.get('faces'):
-                for other_photo in data:
-                    if not (other_photo.get('path') in [cfp.get('path') for cfp in cfp_result]) \
-                            and len(other_photo.get('faces')) \
-                            and not (other_photo.get('path') == current_find_photo.get('path')):
-                        for other_face in other_photo.get('faces'):
-                            if distance_metric == 'cosine':
-                                distance = dst.findCosineDistance(cfp_face.get('encoding'),
-                                                                  other_face.get('encoding'))
-                            elif distance_metric == 'euclidean':
-                                distance = dst.findEuclideanDistance(cfp_face.get('encoding'),
-                                                                     other_face.get('encoding'))
-                            elif distance_metric == 'euclidean_l2':
-                                distance = dst.findEuclideanDistance(dst.l2_normalize(cfp_face.get('encoding')),
-                                                                     dst.l2_normalize(other_face.get('encoding')))
-                            else:
-                                raise ValueError("Invalid distance_metric passed - ", distance_metric)
-
-                            comparison_result = distance <= threshold
-                            if comparison_result:
-                                cfp_result.append({"path": other_photo.get('path'),
-                                                   "face_areas": {
-                                                       "origin": cfp_face.get('face_area'),
-                                                       "similar": other_face.get('face_area')}
-                                                   })
-                                break
-
-            result.append({"origin": current_find_photo.get('path'),
-                           "similar": cfp_result})
-        json.dump(result, rf, indent=4)
-
-
 def _group_process(origin_data, all_data, queue, threshold, distance_metric, disable):
-    """ Функция выполняемая отдельными процессами в group_similar_faces_parallel """
+    """ Функция выполняемая отдельными процессами в group_similar_faces """
     result = []
     for current_find_photo in tqdm(origin_data, disable=disable):
         cfp_result = []
@@ -282,8 +165,8 @@ def _group_process(origin_data, all_data, queue, threshold, distance_metric, dis
     queue.put(result)
 
 
-def group_similar_faces_parallel(encodings_file, result_file='dfv2_result.json', model_name=None, threshold=None,
-                                 distance_metric=DISTANCE_METRIC[0], disable=False, process_count=None):
+def group_similar_faces(encodings_file, result_file='dfv2_result.json', model_name=None, threshold=None,
+                        distance_metric=DISTANCE_METRIC[0], disable=False, process_count=None):
     """
        Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл result_file
        в формате:
@@ -324,7 +207,8 @@ def group_similar_faces_parallel(encodings_file, result_file='dfv2_result.json',
             for i in range(process_count):
                 process_list.append(multiprocessing.Process(target=_group_process,
                                                             kwargs={
-                                                                'origin_data': data[i*pt_count: i*pt_count+pt_count],
+                                                                'origin_data': data[
+                                                                               i * pt_count: i * pt_count + pt_count],
                                                                 'all_data': data,
                                                                 'queue': queue,
                                                                 'threshold': threshold,
@@ -432,17 +316,12 @@ if __name__ == '__main__':
     directory = 'D:/Hobby/NmProject/Test_photo/Test_1-Home_photos'
     # directory = '../Test_photo/Telegram_photo_set'
 
-    # all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory), directory + '/encodings.json',
-    #                          model_name=MODELS[2])
-    # all_df_encodings_to_file_parallel(tool_module.get_all_file_in_directory(directory),
-    #                                   directory + '/encodings_parallel.json',
-    #                                   model_name=MODELS[2], process_count=4)
-    # group_similar_faces(directory + '/dfv2_facenet512_encodings.json',
-    #                     directory + '/dfv2_facenet512(0.2499999999999999)_result_simple.json',
-    #                     threshold=0.2499999999999999)
-    # group_similar_faces_parallel(directory + '/dfv2_facenet512_encodings_parallel.json',
-    #                              directory + '/dfv2_facenet512(0.2499999999999999)_result_parallel.json',
-    #                              threshold=0.2499999999999999, process_count=None)
+    all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory),
+                             directory + '/encodings_parallel.json',
+                             model_name=MODELS[8], process_count=4)
+    # group_similar_faces_(directory + '/dfv2_facenet512_encodings_parallel.json',
+    #                      directory + '/dfv2_facenet512(0.2499999999999999)_result_parallel.json',
+    #                      threshold=0.2499999999999999, process_count=None)
 
     # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
     #           model_name=MODELS[2])
