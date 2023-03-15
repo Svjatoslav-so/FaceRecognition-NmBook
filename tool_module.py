@@ -3,6 +3,7 @@
 """
 import json
 import math
+import multiprocessing
 import os
 from pathlib import Path
 
@@ -20,6 +21,22 @@ def demo():
         info = metadata['by_photo'][photo_id]
         photo_path = p.joinpath('photo', photo_id[0], photo_id)
         print(f"Photo {info['title']} in docs {info['docs']} at path {photo_path}")
+
+
+def get_optimal_process_count(task_count, process_count=None):
+    """
+        Высчитывает оптимальное для task_count (количества задач), количество параллельных процессов.
+        process_count - желаемое количество процессов.
+        Возвращает кортеж вида: (количество процессов, количество задач на один процесс)
+    """
+    if not process_count:
+        process_count = multiprocessing.cpu_count()
+    if process_count > task_count:
+        process_count = task_count
+    data_block_size = math.ceil(task_count / process_count)
+    process_count = math.ceil(task_count / data_block_size)
+    print(f"process_count: {process_count}, data_block_size: {data_block_size}")
+    return process_count, data_block_size
 
 
 def get_all_photo_in_directory(start_directory, pattern='*.jpg'):

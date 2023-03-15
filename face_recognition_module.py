@@ -102,8 +102,9 @@ def group_similar_faces(encodings_file='encodings.json', result_file='result.jso
             c_p_result = []
             for c_p_face in c_p_data.get('faces'):
                 for same_data in data:
-                    if not (same_data.get('path') in c_p_result) and len(same_data.get('faces')) and not (
-                            same_data.get('path') == c_p_data.get('path')):
+                    if not (same_data.get('path') in [cp.get('path') for cp in c_p_result]) \
+                            and len(same_data.get('faces')) \
+                            and not (same_data.get('path') == c_p_data.get('path')):
                         comparison_result = face_recognition.compare_faces(c_p_face.get('encoding'),
                                                                            np.array([f.get('encoding') for f in
                                                                                      same_data.get('faces')]),
@@ -166,9 +167,9 @@ if __name__ == '__main__':
     # img.show()
 
     # directory = 'D:/FOTO/Original photo/Olympus'
-    directory = '../Test_photo/Test_1-Home_photos'
+    # directory = '../Test_photo/Test_1-Home_photos'
     # directory = 'D:/FOTO/Original photo/Moto'
-    # directory = 'D:/Hobby/NmProject/nmbook_photo/out/photo'
+    directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out/photo'
     # directory = 'D:/FOTO/Original photo/Saved Pictures/Фото cкачаные с GooglePhoto'
     # p_paths = get_all_photo_in_directory(directory, '*.jpg')
     p_paths = tool_module.get_all_file_in_directory(directory)

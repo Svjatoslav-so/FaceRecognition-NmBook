@@ -13,7 +13,7 @@ from deepface import DeepFace
 from tool_module import get_all_file_in_directory
 
 # список самых популярных детекторов лиц
-DETECTOR_BACKEND = ['retinaface', 'mtcnn', 'opencv', 'ssd', 'dlib', 'mediapipe']
+DETECTOR_BACKEND = ['retinaface', 'mtcnn', 'opencv', 'ssd', 'dlib']
 # список самых популярных моделей распознавания лиц
 MODELS = ["VGG-Face", "Facenet", "Facenet512", "OpenFace", "DeepFace", "DeepID", "ArcFace", "Dlib", "SFace"]
 # доступные показатели расстояния
