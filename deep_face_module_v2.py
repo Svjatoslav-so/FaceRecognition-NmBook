@@ -54,10 +54,10 @@ def _encoding_process(paths, queue, model_name, target_size, detector_backends, 
                                                    , align=align
                                                    , normalization='base'
                                                    )
-                face_representation = {"face_area": (img_region['y'],
+                face_representation = {"face_area": (img_region['x'],
+                                                     img_region['y'],
                                                      img_region['x'] + img_region['w'],
-                                                     img_region['y'] + img_region['h'],
-                                                     img_region['x']),
+                                                     img_region['y'] + img_region['h']),
                                        "encoding": embedding_obj[0]["embedding"]}
                 img_faces.append(face_representation)
             data.append({"path": path,
@@ -311,17 +311,19 @@ if __name__ == '__main__':
 
     # directory = 'D:/FOTO/Original photo/Olympus'
     # directory = 'D:/FOTO/Finished photo'
-    # directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out/photo'
+    directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out/photo'
     # directory = 'D:/FOTO/Original photo/Moto'
-    directory = 'D:/Hobby/NmProject/Test_photo/Test_1-Home_photos'
+    # directory = 'D:/Hobby/NmProject/Test_photo/Test_1-Home_photos'
     # directory = '../Test_photo/Telegram_photo_set'
 
     all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory),
-                             directory + '/encodings_parallel.json',
-                             model_name=MODELS[8], process_count=4)
-    # group_similar_faces_(directory + '/dfv2_facenet512_encodings_parallel.json',
-    #                      directory + '/dfv2_facenet512(0.2499999999999999)_result_parallel.json',
-    #                      threshold=0.2499999999999999, process_count=None)
+                             directory + '/encodings.json',
+                             model_name=MODELS[2],
+                             detector_backends=[DETECTOR_BACKEND[0]],
+                             process_count=2)
+    group_similar_faces(directory + '/dfv2_facenet512_encodings.json',
+                        directory + '/dfv2_facenet512(0.2499999999999999)_result.json',
+                        threshold=0.2499999999999999, process_count=8)
 
     # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
     #           model_name=MODELS[2])

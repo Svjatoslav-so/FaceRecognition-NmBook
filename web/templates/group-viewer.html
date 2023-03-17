@@ -9,6 +9,29 @@
     <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
 </head>
 <body>
+    <div class="detailed_viewer hidden" id="detailed_viewer" >
+        <div class="menu">
+            <button class="close btn" id="close_detailed_viewer">
+                <img src="{{url_for('static', filename='img/close.png')}}" alt="Закрыть">
+            </button>
+        </div>
+        <div class="main_panel">
+            <div id="next_similar">
+                <img src="{{url_for('static', filename='img/right-arrow.png')}}" alt="Предыдущий">
+            </div>
+            <div class="f-panzoom" id="origin-detailed_viewer">
+                <img class="f-panzoom__content" src="" alt="Origin">
+            </div>
+            <div class="f-panzoom" id="similar-detailed_viewer">
+                <img class="f-panzoom__content" src="" alt="Similar">
+            </div>
+            <div id="previous_similar">
+                <img src="{{url_for('static', filename='img/left-arrow.png')}}" alt="Следующий">
+            </div>
+
+        </div>
+    </div>
+    
     <div class="content">
         <div class="control_panel">
             <div class="origin_figure" id="origin_photo_block">
@@ -36,7 +59,7 @@
             <div class="header">
                 <form class="file_loader" method="post" action="{{url_for('open_group_file')}}" id="file_loader">
                         <input type="text" name="group_file" placeholder="Введите абсолютный путь к файлу с результатами" id="file_input">
-                        <button class="load_btn" type="button" id="load_file_btn">Загрузить</button>
+                        <button class="load btn" type="button" id="load_file_btn">Загрузить</button>
                 </form> 
             </div>
             <div class="viewer" id="viewer">

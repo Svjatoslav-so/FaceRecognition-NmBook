@@ -6,11 +6,71 @@ let originPhotoBlock = document.getElementById('origin_photo_block');
 let file_loader_form = document.getElementById('file_loader');
 let file_name_input = document.getElementById('file_input');
 let load_btm = document.getElementById('load_file_btn');
+let close_detailed_viewer_btn = document.getElementById('close_detailed_viewer');
 let groupsList;
 let metadata;
-
+let dataURLs;
+let currentSimilar;
 const options = { click: "toggleCover" };
+// VARIANT I
+// new Panzoom(document.querySelector('#origin-detailed_viewer'), options);
+// new Panzoom(document.querySelector('#similar-detailed_viewer'), options);
 
+close_detailed_viewer_btn.onclick = function(){
+    detailed_viewer.className += ' hidden';
+}
+
+function showDitailedViewer(Request){
+    // console.log('RESPONSE: ', Request.responseText);
+    let response = JSON.parse(Request.response);
+    detailed_viewer.className = detailed_viewer.className.replace(' hidden', '');
+    // VARIANT I
+    // document.querySelector('#origin-detailed_viewer img').setAttribute('src', response['origin']);
+    // document.querySelector('#similar-detailed_viewer img').setAttribute('src', response['similar']);
+
+    // VARIANT II
+    document.querySelector('.detailed_viewer .main_panel').innerHTML = `
+            <div onclick="nextSimilar()" id="next_similar">
+                <img src="static/img/right-arrow.png" alt="Предыдущий">
+            </div>
+            <div class="f-panzoom" id="origin-detailed_viewer">
+                <img class="f-panzoom__content" src="${response['origin']}" alt="Origin">
+            </div>
+            <div class="f-panzoom" id="similar-detailed_viewer">
+                <img class="f-panzoom__content" src="${response['similar']}" alt="Similar">
+            </div>
+            <div onclick="previousSimilar()" id="previous_similar">
+                <img src="static/img/left-arrow.png" alt="Следующий">
+            </div> `;
+
+    new Panzoom(document.querySelector('#origin-detailed_viewer'), options);
+    new Panzoom(document.querySelector('#similar-detailed_viewer'), options);
+}
+
+function loadFaceAreas(element){
+    // console.log('Load Face Areas');
+    currentSimilar = element.parentElement;
+    SendRequest('get',
+                '/get_img_with_face_area',
+                `origin_path=${originPhotoBlock.dataset.origin_path}&similar_path=${element.dataset.path}&file_path=${file_name_input.value}`,
+                showDitailedViewer);
+}
+
+function nextSimilar(){
+    let next = currentSimilar.nextElementSibling;
+    if(!next){
+       next = currentSimilar.parentElement.firstElementChild; 
+    }
+    loadFaceAreas(next.firstElementChild);
+}
+
+function previousSimilar(){
+    let previous = currentSimilar.previousElementSibling;
+    if(!previous){
+        previous = currentSimilar.parentElement.lastElementChild;
+    }
+    loadFaceAreas(previous.firstElementChild);
+}
 
 let getPhotoName = function(path){
     return path.split(/\\\\|\//).reverse()[0];
@@ -20,15 +80,16 @@ let originPhotoShow = function(index=0){
     if (groupsList.length > 0){
         let origin_path = groupsList[index]['origin'];
         let filename = getPhotoName(origin_path);
+        originPhotoBlock.dataset.origin_path = origin_path;
         originPhotoBlock.innerHTML = `
         <div class="caption">
             <p class="person_name">${filename.slice(0,10)} . . . ${filename.slice(30)}<br>${metadata['by_photo'][filename]['title']}</p>
             <p class="document_id">id: ${metadata['by_photo'][filename]['docs']}</p>
         </div>
-        <div class="f-panzoom">
+        <div class="f-panzoom" style="width: 100%;">
             <img class="f-panzoom__content" src="/img_show/${origin_path}" alt="Искомое фото">
         </div>`;
-        originPhotoContainer = document.querySelector("#origin_photo_block .f-panzoom");
+        let originPhotoContainer = document.querySelector("#origin_photo_block .f-panzoom");
         new Panzoom(originPhotoContainer, options);
     }
 }
@@ -55,7 +116,7 @@ let groupShow = function(index=0){
         let newSimilarPhoto = document.createElement('div');
         newSimilarPhoto.className = 'similar_figure';
         newSimilarPhoto.innerHTML = `
-        <div class="caption">
+        <div class="caption" onclick="loadFaceAreas(this)" data-path="${path}">
             <p class="person_name">${filename.slice(0,10)} . . . ${filename.slice(30)}<br>${metadata['by_photo'][filename]['title']}</p>
             <p class="document_id">id: ${metadata['by_photo'][getPhotoName(path)]['docs']}</p>    
         </div>
