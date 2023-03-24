@@ -1,5 +1,5 @@
 console.log('START')
-
+let odbCheckbox = document.getElementById('only_different_biographies');
 let viewer = document.getElementById('viewer');
 let groupMenu = document.getElementById('group_list');
 let originPhotoBlock = document.getElementById('origin_photo_block');
@@ -12,6 +12,8 @@ let metadata;
 let dataURLs;
 let currentSimilar;
 const options = { click: "toggleCover" };
+
+/* ------------------- DitailedViewer -------------------------*/
 // VARIANT I
 // new Panzoom(document.querySelector('#origin-detailed_viewer'), options);
 // new Panzoom(document.querySelector('#similar-detailed_viewer'), options);
@@ -20,6 +22,8 @@ close_detailed_viewer_btn.onclick = function(){
     detailed_viewer.className += ' hidden';
 }
 
+/* Обрабатывает ответ сервера, на просьбу дать origin-фото и текущее similar-фото
+   с отрисованными квадратиками вокруг лиц. Если все Ок, то отображает их. */
 function showDitailedViewer(Request){
     // console.log('RESPONSE: ', Request.responseText);
     let response = JSON.parse(Request.response);
@@ -47,6 +51,8 @@ function showDitailedViewer(Request){
     new Panzoom(document.querySelector('#similar-detailed_viewer'), options);
 }
 
+/* Загружает с сервера origin-фото и текущее similar-фото
+ с отрисованными квадратиками вокруг лиц. Отображает загруженные фото */
 function loadFaceAreas(element){
     // console.log('Load Face Areas');
     currentSimilar = element.parentElement;
@@ -56,6 +62,7 @@ function loadFaceAreas(element){
                 showDitailedViewer);
 }
 
+/* Вызывает детальный просмотр фото для соседнего фото справа */
 function nextSimilar(){
     let next = currentSimilar.nextElementSibling;
     if(!next){
@@ -64,6 +71,7 @@ function nextSimilar(){
     loadFaceAreas(next.firstElementChild);
 }
 
+/* Вызывает детальный просмотр фото для соседнего фото слева  */
 function previousSimilar(){
     let previous = currentSimilar.previousElementSibling;
     if(!previous){
@@ -72,10 +80,14 @@ function previousSimilar(){
     loadFaceAreas(previous.firstElementChild);
 }
 
+/* -------------------------- Group Viewer --------------------------*/
+
+/* Из пути к файлу извлекает его имя */
 let getPhotoName = function(path){
     return path.split(/\\\\|\//).reverse()[0];
 }
 
+/* Отображает origin фото выбранной группы */
 let originPhotoShow = function(index=0){
     if (groupsList.length > 0){
         let origin_path = groupsList[index]['origin'];
@@ -94,7 +106,9 @@ let originPhotoShow = function(index=0){
     }
 }
 
+/* Отображает список групп */
 let groupMenuShow = function(active=0){
+    groupMenu.innerHTML = "";
     document.getElementById('all_group_count').innerHTML = `всего: ${groupsList.length}`;
     for(let i = 0; i < groupsList.length; i++){
         let newGroupLi = document.createElement('li');
@@ -108,6 +122,19 @@ let groupMenuShow = function(active=0){
     }
 }
 
+/* Отвечает за переключение между группами */
+let chooseGroup = function(){
+    for(let i = 0; i < groupMenu.children.length; i++){
+        if(groupMenu.children[i].className.includes('active')){
+            groupMenu.children[i].className = 'group_li';
+        }
+    }
+    this.className = 'group_li active';
+    groupShow(this.dataset.group_id);
+    originPhotoShow(this.dataset.group_id);
+}
+
+/* Отображает список похожих фото выбранной группы */
 let groupShow = function(index=0){
     viewer.innerHTML = "";
     for(let i = 0; i < groupsList[index]['similar'].length; i++){
@@ -128,6 +155,7 @@ let groupShow = function(index=0){
         activatePanzoom();
 }
 
+/* Активирует Panzoom для всех текущих похожих фото */
 let activatePanzoom = function(){
     const containers = document.querySelectorAll(".similar_figure .f-panzoom");
     for(let i = 0;  i < containers.length; i++){
@@ -135,11 +163,17 @@ let activatePanzoom = function(){
     }
 }
 
+/* Обрабатывает ответ сервера, на просьбу дать файл с результатами.
+   Если все Ок, то из json вытягивает groupsList и metadata.
+   Затем пропускает groupsList через фильтры и отображает на странице. */
 let fileShow = function(Request){
     // console.log('RESPONSE: ', Request.responseText);
     let response = JSON.parse(Request.response);
     groupsList = response['group_list'];
     metadata = response['metadata'];
+    if(odbCheckbox.checked){
+        filterOnlyFotoFromDifferentBiographies();
+    }
     console.log('groupsList: ', groupsList);
     console.log('metadata: ', metadata);
     originPhotoShow();
@@ -147,17 +181,7 @@ let fileShow = function(Request){
     groupShow();
 }
 
-let chooseGroup = function(){
-    for(let i = 0; i < groupMenu.children.length; i++){
-        if(groupMenu.children[i].className.includes('active')){
-            groupMenu.children[i].className = 'group_li';
-        }
-    }
-    this.className = 'group_li active';
-    groupShow(this.dataset.group_id);
-    originPhotoShow(this.dataset.group_id);
-}
-
+/* При клике по load_btm происходит загрузка данных */
 load_btm.onclick = function(){
     console.log('BUTTON_CLICK');
     if (file_name_input.value ){
@@ -168,6 +192,17 @@ load_btm.onclick = function(){
     }
     else{
         alert('Input file name');
+    }
+}
+
+/* При изменении odbCheckbox происходит перезагрузка данных */
+odbCheckbox.onchange = function(){
+    console.log('ODBCheckbox');
+    if (file_name_input.value ){
+        SendRequest(file_loader_form.getAttribute('method'),
+                    file_loader_form.getAttribute('action'),
+                    `${file_name_input.getAttribute('name')}=${file_name_input.value}`,
+                    fileShow);
     }
 }
 
@@ -269,3 +304,31 @@ function SendRequest(r_method, r_path, r_args, r_handler)
         Request.send(null);
     }
 } 
+
+/* Фильтрует groupsList. В каждой группе из списка похожих фото удаляет все фото
+ у которых id биографии совпадает с origin фото. Если в группе не остается похожих фото,
+ то группа удаляется из groupsList */ 
+function filterOnlyFotoFromDifferentBiographies(){
+    console.log('FILTRED');
+    for(let groupIndex = 0; groupIndex < groupsList.length; groupIndex++){
+        let originBioIdList = metadata['by_photo'][getPhotoName(groupsList[groupIndex]['origin'])]['docs'];
+        // console.log(originBioIdList);
+        groupsList[groupIndex]['similar'] = groupsList[groupIndex]['similar'].filter(function(element){
+            let similarBioIdList = metadata['by_photo'][getPhotoName(element['path'])]['docs'];
+            // console.log(similarBioIdList);
+            isSame = false;
+            for(id of similarBioIdList){
+                isSame = originBioIdList.includes(id);
+                if (isSame){
+                    // console.log("DELETE ", originBioIdList, similarBioIdList);
+                    break;
+                }
+            return !isSame;
+            }
+
+        });
+    }
+    groupsList = groupsList.filter(function(element){
+        return element['similar'].length;
+    });
+}
