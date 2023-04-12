@@ -316,14 +316,16 @@ if __name__ == '__main__':
     # directory = 'D:/Hobby/NmProject/Test_photo/Test_1-Home_photos'
     # directory = '../Test_photo/Telegram_photo_set'
 
-    all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory),
-                             directory + '/encodings.json',
-                             model_name=MODELS[2],
-                             detector_backends=[DETECTOR_BACKEND[0]],
-                             process_count=2)
-    group_similar_faces(directory + '/dfv2_facenet512_encodings.json',
-                        directory + '/dfv2_facenet512(0.2499999999999999)_result.json',
-                        threshold=0.2499999999999999, process_count=8)
+    # all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory),
+    #                          directory + '/encodings.json',
+    #                          model_name=MODELS[8],
+    #                          detector_backends=[DETECTOR_BACKEND[0], DETECTOR_BACKEND[1]],
+    #                          process_count=2)
+    # for t in np.arange(0.3, 0.05, -0.05):
+    t = 0.05
+    group_similar_faces(directory + '/dfv2_sface_encodings.json',
+                        directory + f'/dfv2_sface({t})_result.json',
+                        threshold=t, process_count=8)
 
     # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
     #           model_name=MODELS[2])

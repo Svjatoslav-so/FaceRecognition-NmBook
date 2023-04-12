@@ -1,3 +1,7 @@
+#Data Base
+/DB
+*.db
+
 # Photo
 *.jpeg
 *.jpg
