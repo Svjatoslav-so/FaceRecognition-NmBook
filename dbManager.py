@@ -5,7 +5,7 @@ from pathlib import Path
 
 from deepface.commons import distance as dst
 from sqlalchemy import create_engine, Column, Integer, Text, Float, String, ForeignKey, Table, Engine, event, Index, \
-    UniqueConstraint
+    UniqueConstraint, select
 from sqlalchemy.orm import relationship, declarative_base, sessionmaker, Session
 from tqdm import tqdm
 
@@ -42,6 +42,15 @@ class Face(Base):
                f"x1: {self.x1}, y1: {self.y1}, x2: {self.x2}, y2: {self.y2}, " \
                f"photo_id: {self.photo_id})>"
 
+    def to_dict(self):
+        return {'id': self.id, 'embedding': self.embedding, 'x1': self.x1, 'y1': self.y1, 'x2': self.x2, 'y2': self.y2,
+                'photo_id': self.photo_id}
+
+    def to_dict_with_relationship(self):
+        dic = self.to_dict()
+        dic['photo'] = self.photo.to_dict()
+        return dic
+
 
 photo_document = Table('photo_document', Base.metadata,
                        Column('photo_id', String(200), ForeignKey('photos.id'), primary_key=True),
@@ -56,7 +65,18 @@ class Photo(Base):
     docs = relationship("Document", secondary=photo_document, back_populates="photos")
 
     def __repr__(self):
-        return f"<Photo(id:{self.id}, title:{self.title}, doc_id: {self.doc_id})>"
+        return f"<Photo(id:{self.id}, title:{self.title}, doc_id: {self.docs})>"
+
+    def to_dict(self):
+        return {'id': self.id, 'title': self.title}
+
+    def to_dict_with_relationship(self, face=True, doc=True):
+        dic = self.to_dict()
+        if face:
+            dic['faces'] = [f.to_dict() for f in self.faces]
+        if doc:
+            dic['docs'] = [d.to_dict() for d in self.docs]
+        return dic
 
 
 class Document(Base):
@@ -66,6 +86,12 @@ class Document(Base):
 
     def __repr__(self):
         return f"<Document(id:{self.id})>"
+
+    def to_dict(self):
+        return {'id': self.id}
+
+    def to_dict_with_relationship(self):
+        return {'id': self.id, 'photos': [p.to_dict() for p in self.photos]}
 
 
 class Distance(Base):
@@ -83,13 +109,13 @@ class Distance(Base):
     )
 
     def __repr__(self):
-        return f"<Distance(id:{self.id}, face_1:{self.face_1}, face_2: {self.face_2}, distance: {self.distance})>"
+        return f"<Distance(id:{self.id}, face_1:{self.face1_id}, face_2: {self.face2_id}, distance: {self.distance})>"
 
 
 class DBManager:
-    def __init__(self, db_name: str):
+    def __init__(self, db_name: str, echo=False):
         self.db_name = db_name
-        self.engine = create_engine(f"sqlite:///{db_name}", echo=True)
+        self.engine = create_engine(f"sqlite:///{db_name}", echo=echo)
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
 
@@ -240,20 +266,80 @@ class DBManager:
             raise ValueError(f'table_class - должен быть один из классов [Face, Photo, Document, Distance],'
                              f' а передан {table_class} типа {type(table_class)}')
 
+    def get_photo_group_list_of_similar(self, threshold, min_face_area):
+        """ Получаем список групп
+                threshold - пороговое значение для расстояния между векторами лиц
+                min_face_area - пороговое значение для площади лица
+            Возвращает список словарей вида:
+            {
+             'photo': {'id': str, 'title': str, 'docs': [int]},
+             'face':
+                {'id': int, 'embedding': [float], 'x1': float, 'y1': float, 'x2': float, 'y2': float, 'photo_id': str}
+            }
+
+        """
+        with self.Session() as session:
+            photos_faces = session.query(Photo, Face).join(Face).filter(
+                (Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area
+            ).join(photo_document, Face.photo_id == photo_document.c.photo_id). \
+                filter(Face.id == Distance.face1_id,
+                       Distance.distance < threshold,
+                       Distance.face2_id < Distance.face1_id,
+                       photo_document.c.doc_id.notin_(
+                           select(photo_document.c.doc_id).join(Face,
+                                                                Face.photo_id == photo_document.c.photo_id).filter(
+                               Face.id == Distance.face2_id))
+                       ).distinct().all()
+            return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos_faces]
+
+    def get_group_photo_with_face(self, origin_face, threshold, min_face_area):
+        """
+            Получаем фото группы
+                origin_face - id лица, которое образовало группу
+                threshold - пороговое значение для расстояния между векторами лиц
+                min_face_area - пороговое значение для площади лица
+            Возвращает список словарей вида:
+            {
+             'photo': {'id': str, 'title': str, 'docs': [int]},
+             'face':
+                {'id': int, 'embedding': [float], 'x1': float, 'y1': float, 'x2': float, 'y2': float, 'photo_id': str}
+            }
+         """
+        with self.Session() as session:
+            # origin_photo = session.query(Photo).get(origin_photo)
+            origin_face = session.query(Face).get(origin_face)
+            photos = session.query(Photo, Face).join(Face). \
+                filter((Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area). \
+                join(photo_document).filter(Face.id == Distance.face2_id,
+                                            # Distance.face1_id.in_([f.id for f in origin_photo.faces]),
+                                            Distance.face1_id == origin_face.id,
+                                            Distance.distance < threshold,
+                                            Distance.face2_id < Distance.face1_id,  # ?
+                                            Distance.face1_id != Distance.face2_id,
+                                            photo_document.c.doc_id.notin_([d.id for d in origin_face.photo.docs])). \
+                distinct().group_by(Photo.id).all()  # group_by(Photo.id)
+            print(photos)
+            return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos]
+
 
 if __name__ == "__main__":
     print("START")
     start_time = time.time()
 
     directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out'
-    manager = DBManager('DB/NmBookPhoto(facenet512-retinaface).db')
+    manager = DBManager('web/db/NmBookPhoto(facenet512-retinaface).db', echo=True)
     # manager.fill_doc_photos_faces_from_file(directory + "/photo/dfv2_facenet512_encodings.json",
     #                                         directory + "/metadata.json")
     # manager.drop_all_tables()
 
-    manager.calculate_distance_matrix(process_count=10)
+    # manager.calculate_distance_matrix(process_count=10)
 
     # manager.delete_all_data_in_table(Distance)
+
+    # manager.get_all_unique_face_group(threshold=0.08)
+    # manager.test()
+    manager.get_photo_group_list_of_similar(0.1)
+    # manager.get_group_photo_with_face(14, 0.3)
 
     end_time = time.time()
     print("time in second: ", end_time - start_time, "\ntime in min: ", (end_time - start_time) / 60)
