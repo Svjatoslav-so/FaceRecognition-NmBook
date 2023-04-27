@@ -1,0 +1,60 @@
+{% extends "base_template.html" %}
+{% block css_before %}
+<link  rel="stylesheet"  href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.css">
+{% endblock %}
+
+{% block main_block %}
+    <div class="content">
+        <div class="control_panel">
+            <div class="origin_figure" id="origin_photo_block">
+<!--                <div class="caption">-->
+<!--                    <p class="person_name">{{groups[0]['photo']['title']}}</p>-->
+<!--                    <p class="document_id">id:{% for doc in groups[0]['photo']['docs']%} {{ doc['id']}} {% endfor %} </p>-->
+<!--                </div>-->
+<!--                <div>-->
+<!--                    <img src="{{url_for('img_show', path_to_img='static/out/photo/'+ groups[0]['photo']['id'][0] +'/'+ groups[0]['photo']['id'] +'.jpeg')}}" alt="Искомое фото">-->
+<!--                </div>-->
+            </div>
+            <div class="group_manager">
+                <div class="group_title">
+                    <h3>Группы</h3> <span id="all_group_count">всего: {{groups|length}}</span>
+                </div>
+                <div class="group_list">
+                    <ul id="group_list">
+                        {% for i in range(groups|length) %}
+                            <li class="group_li {{ 'active' if i == 0 }}"
+                            data-origin_photo-id="{{ groups[i]['photo']['id'] }}"
+                            data-origin_face-id="{{ groups[i]['face']['id'] }}"
+                            data-origin_photo-title="{{ groups[i]['photo']['title'] }}"
+                            data-origin_photo-docs="{% for doc in groups[i]['photo']['docs']%}{{ doc['id'] }} {% endfor %}"
+                            data-origin_photo-x1="{{groups[i]['face']['x1']}}"
+                            data-origin_photo-y1="{{groups[i]['face']['y1']}}"
+                            data-origin_photo-x2="{{groups[i]['face']['x2']}}"
+                            data-origin_photo-y2="{{groups[i]['face']['y2']}}"
+                            >
+                                <p>Группа {{i+1}} {{ groups[i]['photo']['title']|truncate(20, True, '...', 0) if groups[i]['photo']['title'] }}</p>
+    <!--                            <p>Количество фото в группе</p>-->
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="threshold_block">
+                    <label for="threshold">Точность:</label>
+                    <input type="range" min="0" max="0.3" step="0.01" value="{{threshold}}" id="threshold">
+                    <div class="range_preview" id="threshold_preview"> {{threshold}}</div>
+                </div>
+            </div>
+
+
+        </div>
+        <div class="view_panel">
+            <div class="viewer" id="viewer">
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block js_after %}
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.umd.js"></script>
+    <script src="{{url_for('static', filename='js/smart-viewer-script.js')}}"></script>
+{% endblock %}

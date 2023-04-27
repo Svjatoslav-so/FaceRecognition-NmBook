@@ -1,0 +1,8 @@
+<div class="caption">
+    <p class="person_name">{{ origin_photo_id|truncate(30)}} <br>{{origin_photo_title}}</p>
+    <p class="document_id">id: {{origin_photo_docs}}</p>
+</div>
+<div class="f-panzoom" style="width: 100%;">
+<!--    <img class="f-panzoom__content" src="{{url_for('img_show', path_to_img='static/out/photo/'+ origin_photo_id[0] +'/'+ origin_photo_id +'.jpeg')}}" alt="Искомое фото">-->
+    <img class="f-panzoom__content" src="{{foto_with_face('static/out/photo/'+ origin_photo_id[0] +'/'+ origin_photo_id +'.jpeg', (origin_photo_x1, origin_photo_y1, origin_photo_x2, origin_photo_y2))}}" alt="Искомое фото">
+</div>

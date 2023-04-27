@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>NmBookPhoto</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/reset.css')}}">
+    {% block css_before %}
+    {% endblock %}
+    <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
+</head>
+<body>
+    <div class="main_panel">
+        <ul class="main_menu">
+            <li><a href="{{url_for('home')}}">Главная</a></li>
+            <li><a href="{{url_for('group_viewer')}}">Просмотр Групп (old)</a></li>
+            <li><a href="{{url_for('smart_group_viewer')}}">Просмотр Групп</a></li>
+        </ul>
+        <label>База данных :
+            <select class="db_select" name="db" id="db">
+                {% for f in dbs %}
+                    <option value="{{f}}" {% if session['db'] == f %} selected {% endif %}>
+                        {{f}}
+                    </option>
+                {% endfor %}
+            </select>
+        </label>
+    </div>
+
+    {% block main_block %}
+    {% endblock %}
+
+    <script src="{{url_for('static', filename='js/base_script.js')}}"></script>
+    {% block js_after %}
+    {% endblock %}
+</body>
+</html>

@@ -1,14 +1,9 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Просмотр Групп</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="{{url_for('static', filename='css/reset.css')}}">
-    <link  rel="stylesheet"  href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.css">
-    <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
-</head>
-<body>
+{% extends "base_template.html" %}
+{% block css_before %}
+<link  rel="stylesheet"  href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.css">
+{% endblock %}
+
+{% block main_block %}
     <div class="detailed_viewer hidden" id="detailed_viewer" >
         <div class="menu">
             <button class="close btn" id="close_detailed_viewer">
@@ -70,9 +65,9 @@
             </div> 
         </div>
     </div>
+{% endblock %}
 
+{% block js_after %}
     <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.umd.js"></script>
     <script src="{{url_for('static', filename='js/script.js')}}"></script>
-
-</body>
-</html>
+{% endblock %}

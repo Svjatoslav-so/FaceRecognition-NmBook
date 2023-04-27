@@ -1,3 +1,6 @@
+#Zip
+*.zip
+
 #Data Base
 /DB
 *.db
