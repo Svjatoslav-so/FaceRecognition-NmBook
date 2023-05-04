@@ -162,14 +162,16 @@ def set_db(db):
 
 
 def get_foto_with_square_around_face(photo_path, face_area):
-    img = Image.fromarray(cv2.cvtColor(cv2.imread(photo_path), cv2.COLOR_BGR2RGB))
-    draw = ImageDraw.Draw(img)
-    draw.rectangle(face_area, outline=(255, 0, 0), width=5)
+    img = Image.fromarray(cv2.cvtColor(cv2.imread(photo_path), cv2.COLOR_BGR2RGB)).convert("RGBA")
+    rectangle = Image.new("RGBA", img.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(rectangle)
+    draw.rectangle(face_area, outline=(255, 0, 0, 40), width=5)
+    out = Image.alpha_composite(img, rectangle)
 
-    if img.size[0] > 1500 or img.size[1] > 1500:
-        img = ImageOps.contain(img, (1500, 1500))
+    if out.size[0] > 1500 or out.size[1] > 1500:
+        out = ImageOps.contain(out, (1500, 1500))
     buffered = BytesIO()
-    img.save(buffered, format="JPEG")
+    out.save(buffered, format="png")
     img_str = str(base64.b64encode(buffered.getvalue()))[2:-1]
     return f'data:image/jpeg;base64,{img_str}'
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from deepface.commons import distance as dst
 from sqlalchemy import create_engine, Column, Integer, Text, Float, String, ForeignKey, Table, Engine, event, Index, \
     UniqueConstraint, select
-from sqlalchemy.orm import relationship, declarative_base, sessionmaker, Session
+from sqlalchemy.orm import relationship, declarative_base, sessionmaker, Session, aliased
 from tqdm import tqdm
 
 import tool_module
@@ -279,6 +279,7 @@ class DBManager:
 
         """
         with self.Session() as session:
+            face_table = aliased(Face, name='face_table')
             photos_faces = session.query(Photo, Face).join(Face).filter(
                 (Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area
             ).join(photo_document, Face.photo_id == photo_document.c.photo_id). \
@@ -289,7 +290,9 @@ class DBManager:
                            select(photo_document.c.doc_id).join(Face,
                                                                 Face.photo_id == photo_document.c.photo_id).filter(
                                Face.id == Distance.face2_id))
-                       ).distinct().all()
+                       ).join(face_table, face_table.id == Distance.face2_id).filter(
+                (face_table.x2 - face_table.x1) * (face_table.y2 - face_table.y1) > min_face_area
+            ).distinct().order_by(Photo.title).all()  # .order_by(Photo.title)
             return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos_faces]
 
     def get_group_photo_with_face(self, origin_face, threshold, min_face_area):
@@ -327,18 +330,18 @@ if __name__ == "__main__":
     start_time = time.time()
 
     directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out'
-    manager = DBManager('web/db/NmBookPhoto(facenet512-retinaface).db', echo=True)
-    # manager.fill_doc_photos_faces_from_file(directory + "/photo/dfv2_facenet512_encodings.json",
-    #                                         directory + "/metadata.json")
+    manager = DBManager('web/db/NmBookPhoto(facenet512-retinaface)-v2.db', echo=True)
+    manager.fill_doc_photos_faces_from_file(directory + "/photo/dfv2_facenet512_encodings.json",
+                                            directory + "/metadata.json")
     # manager.drop_all_tables()
 
-    # manager.calculate_distance_matrix(process_count=10)
+    manager.calculate_distance_matrix(process_count=10)
 
     # manager.delete_all_data_in_table(Distance)
 
     # manager.get_all_unique_face_group(threshold=0.08)
     # manager.test()
-    manager.get_photo_group_list_of_similar(0.1)
+    # manager.get_photo_group_list_of_similar(0.1, 400)
     # manager.get_group_photo_with_face(14, 0.3)
 
     end_time = time.time()
@@ -348,3 +351,7 @@ if __name__ == "__main__":
 
     # start 1700 MB
     # max 9100 MB
+
+    # t=0.2
+    # 7,8,38,57,104, 217 - small face result
+    # 67, 208, 235 - wrong face recognition

@@ -201,6 +201,7 @@ body{
     margin: 0;
     height: 360px;
     overflow: auto;
+    scroll-snap-type: y mandatory;
 }
 .group_li{
     border-bottom: 1px solid #BDB598;
@@ -209,6 +210,7 @@ body{
     display: flex;
     justify-content: space-between;
     font-size: 20px;
+    scroll-snap-align: start;
 }
 .group_li.active{
     background-color: #AFAFAF;
