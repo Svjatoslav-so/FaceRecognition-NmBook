@@ -1,6 +1,7 @@
 console.log("Smart-viewer-script included successfully");
 let threshold_input = document.getElementById('threshold');
 let threshold_preview = document.getElementById('threshold_preview');
+let group_list = document.getElementById('group_list');
 let groups_li = document.getElementsByClassName('group_li');
 let origin_photo_block = document.getElementById('origin_photo_block');
 let viewer = document.getElementById('viewer');
@@ -66,4 +67,19 @@ function loadGroup(elem){
 
 // on page load
 loadGroup(groups_li[0]);
+
+group_list.addEventListener('keydown', function(evt){
+    console.log('"Arrow"')
+    let active = group_list.querySelector('.active');
+    if(evt.key == "ArrowUp" && active.previousElementSibling){
+        loadGroup(active.previousElementSibling)
+        console.log('"ArrowUp"');
+    }
+    else if(evt.key == "ArrowDown" && active.nextElementSibling){
+        loadGroup(active.nextElementSibling)
+        console.log('"ArrowDown"');
+    }
+}, false);
+
+
 

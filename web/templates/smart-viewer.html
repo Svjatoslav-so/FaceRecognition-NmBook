@@ -20,7 +20,7 @@
                     <h3>Группы</h3> <span id="all_group_count">всего: {{groups|length}}</span>
                 </div>
                 <div class="group_list">
-                    <ul id="group_list">
+                    <ul id="group_list" tabindex="0">
                         {% for i in range(groups|length) %}
                             <li class="group_li {{ 'active' if i == 0 }}"
                             data-origin_photo-id="{{ groups[i]['photo']['id'] }}"
