@@ -5,17 +5,30 @@ import json
 import multiprocessing
 import os
 import time
+from math import copysign
 from pathlib import Path
 
-import matplotlib.pyplot as plt
+import cv2
 import numpy as np
+import tensorflow as tf
 from PIL import Image
 from deepface import DeepFace
 from deepface.commons import functions, distance as dst
+from deepface.commons.functions import load_image
+from deepface.detectors import FaceDetector, OpenCvWrapper, SsdWrapper, DlibWrapper, MtcnnWrapper, MediapipeWrapper
+from retinaface import RetinaFace
+from retinaface.commons import postprocess
 from tqdm import tqdm
 
 import tool_module
-from tool_module import get_all_file_in_directory
+
+tf_version = tf.__version__
+tf_major_version = int(tf_version.split(".")[0])
+if tf_major_version == 1:
+    from keras.preprocessing import image
+elif tf_major_version == 2:
+    from tensorflow.keras.preprocessing import image
+
 
 # список самых популярных детекторов лиц
 DETECTOR_BACKEND = ['retinaface', 'mtcnn', 'opencv', 'ssd', 'dlib']
@@ -23,6 +36,177 @@ DETECTOR_BACKEND = ['retinaface', 'mtcnn', 'opencv', 'ssd', 'dlib']
 MODELS = ["VGG-Face", "Facenet", "Facenet512", "OpenFace", "DeepFace", "DeepID", "ArcFace", "Dlib", "SFace"]
 # доступные показатели расстояния
 DISTANCE_METRIC = ['cosine', 'euclidean', 'euclidean_l2']
+
+
+def special_retinaface_detect_face(face_detector, img, align=True):
+    """
+        Кастомная функция, используется в special_detect_faces.
+        Точная копия deepface.detectors.RetinaFaceWrapper.detect_face, но дополнительно возвращает координат частей лица
+        ('right_eye', 'left_eye', 'nose', 'mouth_left', 'mouth_right'), которые используются для определения того
+        является ли лицо профилем.
+        Координаты частей лица можно получить из landmarks.
+        Возвращает кортеж (detected_face, img_region, confidence, landmarks)
+    """
+
+    resp = []
+
+    # The BGR2RGB conversion will be done in the preprocessing step of retinaface.
+    # img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) #retinaface expects RGB but OpenCV read BGR
+
+    """
+    face = None
+    img_region = [0, 0, img.shape[1], img.shape[0]] #Really?
+
+    faces = RetinaFace.extract_faces(img_rgb, model = face_detector, align = align)
+
+    if len(faces) > 0:
+        face = faces[0][:, :, ::-1]
+
+    return face, img_region
+    """
+    # --------------------------
+
+    obj = RetinaFace.detect_faces(img, model=face_detector, threshold=0.9)
+
+    if type(obj) == dict:
+        for key in obj:
+            identity = obj[key]
+            facial_area = identity["facial_area"]
+
+            y = facial_area[1]
+            h = facial_area[3] - y
+            x = facial_area[0]
+            w = facial_area[2] - x
+            img_region = [x, y, w, h]
+            confidence = identity["score"]
+
+            # detected_face = img[int(y):int(y+h), int(x):int(x+w)] #opencv
+            detected_face = img[facial_area[1]: facial_area[3], facial_area[0]: facial_area[2]]
+
+            if align:
+                landmarks = identity["landmarks"]
+                left_eye = landmarks["left_eye"]
+                right_eye = landmarks["right_eye"]
+                nose = landmarks["nose"]
+                # mouth_right = landmarks["mouth_right"]
+                # mouth_left = landmarks["mouth_left"]
+
+                detected_face = postprocess.alignment_procedure(detected_face, right_eye, left_eye, nose)
+
+            resp.append((detected_face, img_region, confidence, identity["landmarks"]))
+
+    return resp
+
+
+def special_detect_faces(face_detector, detector_backend, img, align=True):
+    """
+        Кастомная функция, используется в special_extract_faces.
+        Точная копия deepface.detectors.FaceDetector.detect_faces, но использующая
+        кастомную функцию special_retinaface_detect_face вместо deepface.detectors.RetinaFaceWrapper.detect_face.
+        Необходима для получения координат частей лица ('right_eye', 'left_eye', 'nose', 'mouth_left', 'mouth_right'),
+        при использовании detector_backend=retinaface. Которые используются для определения является ли лицо профилем.
+    """
+    backends = {
+        'opencv': OpenCvWrapper.detect_face,
+        'ssd': SsdWrapper.detect_face,
+        'dlib': DlibWrapper.detect_face,
+        'mtcnn': MtcnnWrapper.detect_face,
+        'retinaface': special_retinaface_detect_face,
+        'mediapipe': MediapipeWrapper.detect_face
+    }
+
+    detect_face = backends.get(detector_backend)
+
+    if detect_face:
+        obj = detect_face(face_detector, img, align)
+        # obj stores list of (detected_face, region, confidence)
+
+        return obj
+    else:
+        raise ValueError("invalid detector_backend passed - " + detector_backend)
+
+
+def special_extract_faces(img, target_size=(224, 224), detector_backend='opencv', grayscale=False,
+                          enforce_detection=True,
+                          align=True):
+    """
+        Кастомная функция, используется в _encoding_process.
+        Точная копия deepface.commons.functions.extract_faces, но использующая кастомную функцию special_detect_faces
+        для получения face_objs.
+        Необходима для получения координат частей лица ('right_eye', 'left_eye', 'nose', 'mouth_left', 'mouth_right'),
+        при использовании detector_backend=retinaface. Которые используются для определения является ли лицо профилем.
+        Если detector_backend=retinaface, то словарь содержащий координаты частей лица будет передан 4-м параметром каждого extracted_face,
+        если detector_backend!=retinaface, то 4-й параметр каждого extracted_face - None
+    """
+
+    # this is going to store a list of img itself (numpy), it region and confidence
+    extracted_faces = []
+
+    # img might be path, base64 or numpy array. Convert it to numpy whatever it is.
+    img = load_image(img)
+    img_region = [0, 0, img.shape[1], img.shape[0]]
+
+    if detector_backend == 'skip':
+        face_objs = [(img, img_region, 0)]
+    else:
+        face_detector = FaceDetector.build_model(detector_backend)
+        face_objs = special_detect_faces(face_detector, detector_backend, img, align)
+        if not detector_backend == 'retinaface':
+            face_objs = list(map(lambda x: (x[0], x[1], x[2], None), face_objs))
+
+    # in case of no face found
+    if len(face_objs) == 0 and enforce_detection == True:
+        raise ValueError(
+            "Face could not be detected. Please confirm that the picture is a face photo or consider to set enforce_detection param to False.")
+    elif len(face_objs) == 0 and enforce_detection == False:
+        face_objs = [(img, img_region, 0)]
+
+    for current_img, current_region, confidence, landmarks in face_objs:
+        if current_img.shape[0] > 0 and current_img.shape[1] > 0:
+
+            if grayscale == True:
+                current_img = cv2.cvtColor(current_img, cv2.COLOR_BGR2GRAY)
+
+            # resize and padding
+            if current_img.shape[0] > 0 and current_img.shape[1] > 0:
+                factor_0 = target_size[0] / current_img.shape[0]
+                factor_1 = target_size[1] / current_img.shape[1]
+                factor = min(factor_0, factor_1)
+
+                dsize = (int(current_img.shape[1] * factor), int(current_img.shape[0] * factor))
+                current_img = cv2.resize(current_img, dsize)
+
+                diff_0 = target_size[0] - current_img.shape[0]
+                diff_1 = target_size[1] - current_img.shape[1]
+                if grayscale == False:
+                    # Put the base image in the middle of the padded image
+                    current_img = np.pad(current_img, (
+                        (diff_0 // 2, diff_0 - diff_0 // 2), (diff_1 // 2, diff_1 - diff_1 // 2), (0, 0)), 'constant')
+                else:
+                    current_img = np.pad(current_img,
+                                         ((diff_0 // 2, diff_0 - diff_0 // 2), (diff_1 // 2, diff_1 - diff_1 // 2)),
+                                         'constant')
+
+            # double check: if target image is not still the same size with target.
+            if current_img.shape[0:2] != target_size:
+                current_img = cv2.resize(current_img, target_size)
+
+            # normalizing the image pixels
+            img_pixels = image.img_to_array(current_img)  # what this line doing? must?
+            img_pixels = np.expand_dims(img_pixels, axis=0)
+            img_pixels /= 255  # normalize input in [0, 1]
+
+            # int cast is for the exception - object of type 'float32' is not JSON serializable
+            region_obj = {"x": int(current_region[0]), "y": int(current_region[1]), "w": int(current_region[2]),
+                          "h": int(current_region[3])}
+
+            extracted_face = [img_pixels, region_obj, confidence, landmarks]
+            extracted_faces.append(extracted_face)
+
+    if len(extracted_faces) == 0 and enforce_detection == True:
+        raise ValueError("Detected face shape is ", img.shape, ". Consider to set enforce_detection argument to False.")
+
+    return extracted_faces
 
 
 def _encoding_process(paths, queue, model_name, target_size, detector_backends, enforce_detection, align, disable):
@@ -33,12 +217,12 @@ def _encoding_process(paths, queue, model_name, target_size, detector_backends, 
             img_objs = []
             for d_backend in detector_backends:
                 try:
-                    img_objs = functions.extract_faces(img=path,
-                                                       target_size=target_size,
-                                                       detector_backend=d_backend,
-                                                       grayscale=False,
-                                                       enforce_detection=enforce_detection,
-                                                       align=align)
+                    img_objs = special_extract_faces(img=path,
+                                                     target_size=target_size,
+                                                     detector_backend=d_backend,
+                                                     grayscale=False,
+                                                     enforce_detection=enforce_detection,
+                                                     align=align)
                     break
                 except ValueError as ve:
                     img_objs = []
@@ -46,7 +230,7 @@ def _encoding_process(paths, queue, model_name, target_size, detector_backends, 
                         print(f'{ve} Photo: {path}')
 
             img_faces = []
-            for img_content, img_region, img_confidence in img_objs:
+            for img_content, img_region, img_confidence, landmarks in img_objs:
                 embedding_obj = DeepFace.represent(img_path=img_content
                                                    , model_name=model_name
                                                    , enforce_detection=enforce_detection
@@ -58,7 +242,11 @@ def _encoding_process(paths, queue, model_name, target_size, detector_backends, 
                                                      img_region['y'],
                                                      img_region['x'] + img_region['w'],
                                                      img_region['y'] + img_region['h']),
-                                       "encoding": embedding_obj[0]["embedding"]}
+                                       "encoding": embedding_obj[0]["embedding"],
+                                       "is_side_view": False if landmarks is None else
+                                       not _is_point_in_tetragon(landmarks['nose'],
+                                                                 landmarks['mouth_right'], landmarks['mouth_left'],
+                                                                 landmarks['left_eye'], landmarks['right_eye'])}
                 img_faces.append(face_representation)
             data.append({"path": path,
                          "faces": img_faces})
@@ -68,19 +256,25 @@ def _encoding_process(paths, queue, model_name, target_size, detector_backends, 
     # print("@Encoding_process end!!!")
 
 
-def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_name=MODELS[1],
+def all_df_encodings_to_file(paths_to_photo, file_name='encodings.json', model_name=MODELS[1],
                              detector_backends=None, enforce_detection=True, process_count=None,
                              disable=False):
     """
-        Записывает кодировки лиц(deepface) для всех фото из paths_to_photos в файл file_name в формате json:
+        Записывает кодировки лиц(deepface) для всех фото из paths_to_photo в файл file_name в формате json:
         {
             "path": str(путь к файлу),
-            "faces": {
-                "face_area": (список координат лица),
-                "encoding": (вектор кодировки лица)
+            "faces": [
+                {
+                    "face_area": (список координат лица),
+                    "encoding": (вектор кодировки лица)
+                    "is_side_view": (профиль, если True, если False - анфас)
                 }
+            ]
         }
+        paths_to_photo - список строк.
         model_name - модель используемая для получения кодировки лица.
+        file_name - имя файла в который нужно записать результат,
+                    к указанному имени автоматически добавляется название используемой модели.
         detector_backends - список детекторов распознавания лиц. Если не сработает первый, пробуем следующий.
                             Если None, то по умолчанию используются ['retinaface', 'mtcnn'].
         enforce_detection - если False, то для фото без лица не будет выбрасываться ошибка.
@@ -99,14 +293,14 @@ def all_df_encodings_to_file(paths_to_photos, file_name='encodings.json', model_
 
             process_list = []
             queue = multiprocessing.Queue()
-            process_count, pt_count = tool_module.get_optimal_process_count(len(paths_to_photos), process_count)
+            process_count, pt_count = tool_module.get_optimal_process_count(len(paths_to_photo), process_count)
 
             target_size = functions.find_target_size(model_name=model_name)
             align = True
 
             for i in range(process_count):
                 process_list.append(multiprocessing.Process(target=_encoding_process,
-                                                            kwargs={'paths': paths_to_photos[
+                                                            kwargs={'paths': paths_to_photo[
                                                                              i * pt_count: i * pt_count + pt_count],
                                                                     'queue': queue,
                                                                     'model_name': model_name,
@@ -300,14 +494,41 @@ def show_recognized_faces(img, detector_backend, enforce_detection=True):
         Image.fromarray((ef['face'] * 255).astype(np.uint8)).show()
 
 
+def _is_point_in_tetragon(p: (float, float), a: (float, float), b: (float, float), c: (float, float),
+                          d: (float, float)):
+    """
+        Проверяет находится ли точка p в четырехугольнике abcd
+        a___b
+        |   |
+        d___c
+        p - кортеж с координатами точки p
+        a - кортеж с координатами точки a
+        b - кортеж с координатами точки b
+        c - кортеж с координатами точки c
+        d - кортеж с координатами точки d
+        Возвращает True, если p находится внутри abcd и False, если не находится
+    """
+
+    def make_point(x, y):
+        return {'x': x, 'y': y}
+
+    A = make_point(*a)
+    B = make_point(*b)
+    C = make_point(*c)
+    D = make_point(*d)
+    E = make_point(*p)
+
+    def side(start, end, point):
+        return copysign(1,
+                        (end['x'] - start['x']) * (point['y'] - start['y'])
+                        - (end['y'] - start['y']) * (point['x'] - start['x']))
+
+    return side(A, B, E) == -1 and side(B, C, E) == -1 and side(C, D, E) == -1 and side(D, A, E) == -1
+
+
 if __name__ == '__main__':
     print("START")
     start_time = time.time()
-
-    # known_img = 'D:/FOTO/Original photo/Olympus/P720/0154.JPG'
-    # known_img = 'D:/FOTO/Original photo/Olympus/P9170480.JPG'
-    # known_img = 'D:/FOTO/Original photo/Olympus/P1011618.JPG'
-    # known_img = 'D:/FOTO/Original photo/Moto/photo_2021-08-13_21-37-01.jpg'
 
     # directory = 'D:/FOTO/Original photo/Olympus'
     # directory = 'D:/FOTO/Finished photo'
@@ -316,50 +537,38 @@ if __name__ == '__main__':
     # directory = 'D:/Hobby/NmProject/Test_photo/Test_1-Home_photos'
     # directory = '../Test_photo/Telegram_photo_set'
 
-    # all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory),
-    #                          directory + '/encodings.json',
-    #                          model_name=MODELS[8],
-    #                          detector_backends=[DETECTOR_BACKEND[0], DETECTOR_BACKEND[1]],
-    #                          process_count=2)
+    # # img_path = '/3/3746c174a92b48ed4929dfe4ffaafda7d931629e.jpeg'
+    # # img_path = '/6/6ac86c8c1fae77b67adada7372464be4e941ada3.jpeg'
+    # # img_path = '/0/09e16386146c68fdba6b4abcb317e0c9ae5819e1.jpeg'
+    # # img_path = '/2/22ac1b452181f3274f3005ac49f27cb3b8100609.jpeg'
+    # # img_path = '/2/2f74a31ac0f7d4c27e14673c7910b0c6c3078fdf.jpeg'
+    # img_path = '/9/99405a718e5e9be1c3903be0180a1a4cc0c34c80.jpeg'
+    # # show_recognized_faces(directory+img_path, DETECTOR_BACKEND[0], enforce_detection=True)
+    # resp = RetinaFace.detect_faces(directory+img_path)
+    # print(resp)
+    # img = Image.open(directory+img_path).convert('RGB')
+    # draw = ImageDraw.Draw(img)
+    # for i in range(1, len(resp)+1):
+    #     face = resp[f'face_{i}']
+    #     draw.rectangle(face['facial_area'], outline=(255, 0, 0), width=5)
+    #     draw.point(face['landmarks']['right_eye'], fill=(0, 255, 0))
+    #     draw.point(face['landmarks']['left_eye'], fill=(0, 255, 0))
+    #     draw.point(face['landmarks']['nose'], fill=(0, 255, 0))
+    #     draw.point(face['landmarks']['mouth_left'], fill=(0, 0, 255))
+    #     draw.point(face['landmarks']['mouth_right'], fill=(0, 0, 255))
+    # img.show()
+
+    all_df_encodings_to_file(tool_module.get_all_file_in_directory(directory),
+                             directory + '/encodings_with_profile.json',
+                             model_name=MODELS[6],
+                             detector_backends=[DETECTOR_BACKEND[0]],  # DETECTOR_BACKEND[1]],
+                             process_count=2)
     # for t in np.arange(0.3, 0.05, -0.05):
-    t = 0.05
-    group_similar_faces(directory + '/dfv2_sface_encodings.json',
-                        directory + f'/dfv2_sface({t})_result.json',
-                        threshold=t, process_count=8)
+    # t = 0.05
+    # group_similar_faces(directory + '/dfv2_sface_encodings.json',
+    #                     directory + f'/dfv2_sface({t})_result.json',
+    #                     threshold=t, process_count=8)
 
-    # find_face(known_img, directory + '/dfv2_facenet512_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[2])
-    # find_face(known_img, directory + '/dfv2_vgg-face_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[0])
-    # find_face(known_img, directory + '/dfv2_facenet_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[1])
-    # find_face(known_img, directory + '/dfv2_openface_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[3])
-    # find_face(known_img, directory + '/dfv2_deepface_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[4])
-    # find_face(known_img, directory + '/dfv2_deepid_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[5])  # have a problem, need to solve
-    # find_face(known_img, directory + '/dfv2_arcface_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[6])
-    # find_face(known_img, directory + '/dfv2_dlib_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[7])
-    # find_face(known_img, directory + '/dfv2_sface_encodings.json', distance_metric=DISTANCE_METRIC[0],
-    #           model_name=MODELS[8])
-
-    # with open('not_detected_face_list.json') as ndflf:
-    #     not_detected_photo_list = json.load(ndflf)
-    #     for photo in not_detected_photo_list:
-    #         print(photo)
-    #         try:
-    #             show_recognized_faces(photo, DETECTOR_BACKEND[0])
-    #         except Exception as ve:
-    #             print(ve)
-    # # 0 1 4?
-
-    # print(
-    #     DeepFace.verify('../Test_photo/Test_1-Home_photos/Arsen-1.JPG',
-    #                     '../Test_photo/Test_1-Home_photos/Varl-4.jpg',
-    #                     detector_backend=DETECTOR_BACKEND[0],
-    #                     model_name=MODELS[0]))
+    # print(_is_point_in_tetragon((203, 290), (182, 323), (230, 319), (231, 253), (169, 258)))
     end_time = time.time()
     print("time in second: ", end_time - start_time, "\ntime in min: ", (end_time - start_time) / 60)

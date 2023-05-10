@@ -5,7 +5,7 @@ from pathlib import Path
 
 from deepface.commons import distance as dst
 from sqlalchemy import create_engine, Column, Integer, Text, Float, String, ForeignKey, Table, Engine, event, Index, \
-    UniqueConstraint, select
+    UniqueConstraint, select, Boolean
 from sqlalchemy.orm import relationship, declarative_base, sessionmaker, Session, aliased
 from tqdm import tqdm
 
@@ -34,17 +34,19 @@ class Face(Base):
     y1 = Column(Float, nullable=False)
     x2 = Column(Float, nullable=False)
     y2 = Column(Float, nullable=False)
+    is_side_view = Column(Boolean, nullable=False, default=False)
     photo_id = Column(String(200), ForeignKey('photos.id', ondelete='CASCADE'))
     photo = relationship("Photo", back_populates='faces')
 
     def __repr__(self):
-        return f"<Face(id:{self.id}, embedding:{self.embedding}," \
+        return f"<Face(id:{self.id}, embedding:{self.embedding}, " \
                f"x1: {self.x1}, y1: {self.y1}, x2: {self.x2}, y2: {self.y2}, " \
+               f"is_side_view: {self.is_side_view}, " \
                f"photo_id: {self.photo_id})>"
 
     def to_dict(self):
         return {'id': self.id, 'embedding': self.embedding, 'x1': self.x1, 'y1': self.y1, 'x2': self.x2, 'y2': self.y2,
-                'photo_id': self.photo_id}
+                'is_side_view': self.is_side_view, 'photo_id': self.photo_id}
 
     def to_dict_with_relationship(self):
         dic = self.to_dict()
@@ -102,7 +104,7 @@ class Distance(Base):
     distance = Column(Float, nullable=False)
     face1 = relationship("Face", primaryjoin="Distance.face1_id == Face.id")
     face2 = relationship("Face", primaryjoin="Distance.face2_id == Face.id")
-    idx_face1_face2 = Index('idx_face1_face2', face1_id, face2_id)
+    idx_face1_face2_distance = Index('idx_face1_face2_distance', face1_id, face2_id, distance)
 
     __table_args__ = (
         UniqueConstraint("face1_id", "face2_id"),
@@ -138,7 +140,8 @@ class DBManager:
                                         x1=face['face_area'][0],
                                         y1=face['face_area'][1],
                                         x2=face['face_area'][2],
-                                        y2=face['face_area'][3])
+                                        y2=face['face_area'][3],
+                                        is_side_view=face['is_side_view'])
                         session.add(face_obj, )
                         session.flush()
                         photo_obj.faces.append(face_obj)
@@ -281,7 +284,8 @@ class DBManager:
         with self.Session() as session:
             face_table = aliased(Face, name='face_table')
             photos_faces = session.query(Photo, Face).join(Face).filter(
-                (Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area
+                (Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area,
+                Face.is_side_view == False
             ).join(photo_document, Face.photo_id == photo_document.c.photo_id). \
                 filter(Face.id == Distance.face1_id,
                        Distance.distance < threshold,
@@ -291,7 +295,8 @@ class DBManager:
                                                                 Face.photo_id == photo_document.c.photo_id).filter(
                                Face.id == Distance.face2_id))
                        ).join(face_table, face_table.id == Distance.face2_id).filter(
-                (face_table.x2 - face_table.x1) * (face_table.y2 - face_table.y1) > min_face_area
+                (face_table.x2 - face_table.x1) * (face_table.y2 - face_table.y1) > min_face_area,
+                face_table.is_side_view == False
             ).distinct().order_by(Photo.title).all()  # .order_by(Photo.title)
             return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos_faces]
 
@@ -312,7 +317,9 @@ class DBManager:
             # origin_photo = session.query(Photo).get(origin_photo)
             origin_face = session.query(Face).get(origin_face)
             photos = session.query(Photo, Face).join(Face). \
-                filter((Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area). \
+                filter((Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area
+                       , Face.is_side_view == False
+                       ). \
                 join(photo_document).filter(Face.id == Distance.face2_id,
                                             # Distance.face1_id.in_([f.id for f in origin_photo.faces]),
                                             Distance.face1_id == origin_face.id,
@@ -330,19 +337,72 @@ if __name__ == "__main__":
     start_time = time.time()
 
     directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out'
-    manager = DBManager('web/db/NmBookPhoto(facenet512-retinaface)-v2.db', echo=True)
-    manager.fill_doc_photos_faces_from_file(directory + "/photo/dfv2_facenet512_encodings.json",
-                                            directory + "/metadata.json")
-    # manager.drop_all_tables()
+    manager = DBManager('web/db/NmBookPhoto(arcface-retinaface)-profile.db', echo=True)
+    # manager.fill_doc_photos_faces_from_file(directory + "/photo/dfv2_arcface_encodings_with_profile.json",
+    #                                         directory + "/metadata.json")
+    # # manager.drop_all_tables()
+    #
+    # manager.calculate_distance_matrix(process_count=10)
+    #
+    # # manager.delete_all_data_in_table(Distance)
+    #
+    # # manager.get_all_unique_face_group(threshold=0.08)
+    # # manager.test()
+    # # manager.get_photo_group_list_of_similar(0.1, 400)
+    # # manager.get_group_photo_with_face(14, 0.3)
 
-    manager.calculate_distance_matrix(process_count=10)
-
-    # manager.delete_all_data_in_table(Distance)
-
-    # manager.get_all_unique_face_group(threshold=0.08)
-    # manager.test()
-    # manager.get_photo_group_list_of_similar(0.1, 400)
-    # manager.get_group_photo_with_face(14, 0.3)
+    # # img_path = '/photo/3/3746c174a92b48ed4929dfe4ffaafda7d931629e.jpeg'
+    # # img_path = '/photo/6/6ac86c8c1fae77b67adada7372464be4e941ada3.jpeg'
+    # # img_path = '/photo/0/09e16386146c68fdba6b4abcb317e0c9ae5819e1.jpeg'
+    # # img_path = '/photo/2/22ac1b452181f3274f3005ac49f27cb3b8100609.jpeg'
+    # img_path = '/photo/2/2f74a31ac0f7d4c27e14673c7910b0c6c3078fdf.jpeg'
+    # # img_path = '/photo/9/99405a718e5e9be1c3903be0180a1a4cc0c34c80.jpeg'
+    # # show_recognized_faces(directory+img_path, DETECTOR_BACKEND[0], enforce_detection=True)
+    #
+    # img_objs = functions.extract_faces(img=directory + img_path,
+    #                                    target_size=functions.find_target_size(model_name='Facenet512'),
+    #                                    detector_backend='retinaface',
+    #                                    grayscale=False,
+    #                                    enforce_detection=True,
+    #                                    align=True)
+    # for img_content, img_region, img_confidence in img_objs:
+    #     # # discard expanded dimension
+    #     # if len(img_content.shape) == 4:
+    #     #     img_content = img_content[0]
+    #     # img_content = img_content[:, :, ::-1]
+    #     # img = Image.fromarray((img_content * 255).astype(np.uint8))
+    #     # crop_img = img.crop((img_region['x']-img_region['w']//1,
+    #     #                      img_region['y']-img_region['h']//1,
+    #     #                      img_region['x'] + img_region['w'] + img_region['w']//1,
+    #     #                      img_region['y'] + img_region['h'] + img_region['h']//1))
+    #     # crop_img = img
+    #     img = Image.open(directory + img_path)
+    #     # создаем новое изображение черного цвета размером в 3 раза больше чем область лица
+    #     crop_img = Image.new(img.mode, (3 * img_region['w'], 3 * img_region['h']), (0, 0, 0))
+    #     # в центр полученного черного квадрата вставляем область лица+1/3(области лица) с каждой стороны
+    #     # иначе нераспознается лицо
+    #     crop_img.paste(img.crop((img_region['x'] - img_region['w'] // 3,
+    #                              img_region['y'] - img_region['h'] // 3,
+    #                              img_region['x'] + img_region['w'] + img_region['w'] // 3,
+    #                              img_region['y'] + img_region['h'] + img_region['h'] // 3)),
+    #                    (img_region['w'] - img_region['w'] // 3, img_region['h'] - img_region['h'] // 3))
+    #     crop_img.save('tmp.jpeg')
+    #     resp = RetinaFace.detect_faces('tmp.jpeg')
+    #     print('resp', resp)
+    #
+    #     draw = ImageDraw.Draw(crop_img)
+    #     for i in range(1, len(resp) + 1):
+    #         face = resp[f'face_{i}']
+    #         draw.rectangle(face['facial_area'], outline=(255, 0, 0), width=5)
+    #         draw.point(face['landmarks']['right_eye'], fill=(0, 255, 0))
+    #         draw.point(face['landmarks']['left_eye'], fill=(0, 255, 0))
+    #         draw.point(face['landmarks']['nose'], fill=(0, 255, 0))
+    #         draw.point(face['landmarks']['mouth_left'], fill=(0, 0, 255))
+    #         draw.point(face['landmarks']['mouth_right'], fill=(0, 0, 255))
+    #         print(f'face_{i}', _is_point_in_tetragon(face['landmarks']['nose'],
+    #                                                  face['landmarks']['mouth_right'], face['landmarks']['mouth_left'],
+    #                                                  face['landmarks']['left_eye'], face['landmarks']['right_eye']))
+    #     crop_img.show()
 
     end_time = time.time()
     print("time in second: ", end_time - start_time, "\ntime in min: ", (end_time - start_time) / 60)

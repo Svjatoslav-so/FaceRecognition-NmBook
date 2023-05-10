@@ -51,7 +51,7 @@ def get_all_file_in_directory(start_directory: str, file_extension: list[str] | 
         в директории start_directory и ее подкаталогах
     """
     if file_extension is None:
-        file_extension = ['.jpg', '.JPG', '.jpeg']
+        file_extension = ['.jpg', '.JPG', '.jpeg', '.png']
     all_files = []
     for r, d, f in os.walk(start_directory):  # r=root, d=directories, f = files
         for file in f:
