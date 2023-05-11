@@ -3,13 +3,20 @@ import multiprocessing
 import time
 from pathlib import Path
 
+import sqlalchemy as sa
+import sqlalchemy.ext.compiler
 from deepface.commons import distance as dst
 from sqlalchemy import create_engine, Column, Integer, Text, Float, String, ForeignKey, Table, Engine, event, Index, \
-    UniqueConstraint, select, Boolean
+    UniqueConstraint, select, Boolean, text
 from sqlalchemy.orm import relationship, declarative_base, sessionmaker, Session, aliased
+from sqlalchemy.schema import DDLElement
+from sqlalchemy.sql import table
 from tqdm import tqdm
 
 import tool_module
+
+
+MIN_FACE_AREA = 650
 
 
 @event.listens_for(Engine, "connect")
@@ -114,12 +121,115 @@ class Distance(Base):
         return f"<Distance(id:{self.id}, face_1:{self.face1_id}, face_2: {self.face2_id}, distance: {self.distance})>"
 
 
+# ---------Для работы с представлениями (View)---------------
+# В качестве примера использовался: https://github.com/sqlalchemy/sqlalchemy/wiki/Views
+# Альтернативы: https://stackoverflow.com/questions/9766940/how-to-create-an-sql-view-with-sqlalchemy
+class CreateView(DDLElement):
+    def __init__(self, name, selectable):
+        self.name = name
+        self.selectable = selectable
+
+
+class DropView(DDLElement):
+    def __init__(self, name):
+        self.name = name
+
+
+@sa.ext.compiler.compiles(CreateView)
+def _create_view(element, compiler, **kw):
+    return "CREATE VIEW %s AS %s" % (
+        element.name,
+        compiler.sql_compiler.process(element.selectable, literal_binds=True),
+    )
+
+
+@sa.ext.compiler.compiles(DropView)
+def _drop_view(element, compiler, **kw):
+    return "DROP VIEW %s" % (element.name)
+
+
+def view_exists(ddl, target, connection, **kw):
+    return ddl.name in sa.inspect(connection).get_view_names()
+
+
+def view_doesnt_exist(ddl, target, connection, **kw):
+    return not view_exists(ddl, target, connection, **kw)
+
+
+def view(name, metadata, selectable):
+    t = table(name)
+    t._columns._populate_separate_keys(
+        col._make_proxy(t) for col in selectable.selected_columns
+    )
+    sa.event.listen(
+        metadata,
+        "after_create",
+        CreateView(name, selectable).execute_if(callable_=view_doesnt_exist),
+    )
+    sa.event.listen(
+        metadata, "before_drop", DropView(name).execute_if(callable_=view_exists)
+    )
+    return t
+# ---------------------------------------------------------------
+
+
 class DBManager:
     def __init__(self, db_name: str, echo=False):
         self.db_name = db_name
         self.engine = create_engine(f"sqlite:///{db_name}", echo=echo)
+
+        # создаем представление face_view
+        self.face_view = view(
+            name='face_view',
+            metadata=Base.metadata,
+            selectable=select(Face).filter(
+                (Face.x2 - Face.x1) * (Face.y2 - Face.y1) > MIN_FACE_AREA,
+                Face.is_side_view == False
+            )
+        )
+        # Делаем класс FaceView для работы с представлением face_view через ORM
+        self.FaceView = type('FaceView', (Base,), {'__table__': self.face_view, })
+        self.FaceView.__repr__ = Face.__repr__
+        self.FaceView.to_dict = Face.to_dict
+        self.FaceView.to_dict_with_relationship = Face.to_dict_with_relationship
+
+        # создаем представление distance_view
+        # face_table = aliased(self.FaceView, name='face_table')
+        self.distance_view = view(
+            name='distance_view',
+            metadata=Base.metadata,
+            selectable=select(Distance).join(self.FaceView, self.FaceView.id == Distance.face1_id).
+            join(photo_document, self.FaceView.photo_id == photo_document.c.photo_id).
+            filter(
+                Distance.face2_id.in_(select(self.FaceView.id)),
+                # Distance.face1_id.in_(select(self.FaceView.id)),  # ?
+                Distance.face2_id < Distance.face1_id,
+                photo_document.c.doc_id.notin_(
+                    select(photo_document.c.doc_id).
+                    join(self.FaceView, self.FaceView.photo_id == photo_document.c.photo_id).
+                    filter(self.FaceView.id == Distance.face2_id))
+            )
+        )
+        # Делаем класс DistanceView для работы с представлением distance_view через ORM
+        self.DistanceView = type('DistanceView', (Base,), {'__table__': self.distance_view, })
+        self.DistanceView.__repr__ = Distance.__repr__
+
         Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine)
+        # тест
+        # with self.Session() as session:
+        #     print(session.query(self.FaceView).all())
+
+    # def __del__(self):
+    #     """
+    #         Удаляет представления self.face_view и self.distance_view при удалении объекта DBManager.
+    #         (Использовался при отладке, так как изменения внесенные в структуру представления не отражаются в бд,
+    #         если это представление уже существует в бд)
+    #     """
+    #     print('DBManager object deleted successfully')
+    #     with self.Session() as session:
+    #         session.execute(text(f'DROP VIEW {self.face_view.name}'))
+    #         session.execute(text(f'DROP VIEW {self.distance_view.name}'))
 
     def fill_doc_photos_faces_from_file(self, embedding_file, metadata_file):
         """
@@ -269,10 +379,10 @@ class DBManager:
             raise ValueError(f'table_class - должен быть один из классов [Face, Photo, Document, Distance],'
                              f' а передан {table_class} типа {type(table_class)}')
 
-    def get_photo_group_list_of_similar(self, threshold, min_face_area):
+    def get_photo_group_list_of_similar(self, threshold, min_face_area=MIN_FACE_AREA):
         """ Получаем список групп
                 threshold - пороговое значение для расстояния между векторами лиц
-                min_face_area - пороговое значение для площади лица
+                min_face_area - пороговое значение для площади лица(используется если запрос строится без self.FaceView)
             Возвращает список словарей вида:
             {
              'photo': {'id': str, 'title': str, 'docs': [int]},
@@ -282,30 +392,38 @@ class DBManager:
 
         """
         with self.Session() as session:
-            face_table = aliased(Face, name='face_table')
-            photos_faces = session.query(Photo, Face).join(Face).filter(
-                (Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area,
-                Face.is_side_view == False
-            ).join(photo_document, Face.photo_id == photo_document.c.photo_id). \
-                filter(Face.id == Distance.face1_id,
-                       Distance.distance < threshold,
-                       Distance.face2_id < Distance.face1_id,
-                       photo_document.c.doc_id.notin_(
-                           select(photo_document.c.doc_id).join(Face,
-                                                                Face.photo_id == photo_document.c.photo_id).filter(
-                               Face.id == Distance.face2_id))
-                       ).join(face_table, face_table.id == Distance.face2_id).filter(
-                (face_table.x2 - face_table.x1) * (face_table.y2 - face_table.y1) > min_face_area,
-                face_table.is_side_view == False
-            ).distinct().order_by(Photo.title).all()  # .order_by(Photo.title)
+            # # Вариант 1 (без представлений)
+            # face_table = aliased(Face, name='face_table')
+            # photos_faces = session.query(Photo, Face).join(Face).filter(
+            #     (Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area,
+            #     Face.is_side_view == False
+            # ).join(photo_document, Face.photo_id == photo_document.c.photo_id). \
+            #     filter(Face.id == Distance.face1_id,
+            #            Distance.distance < threshold,
+            #            Distance.face2_id < Distance.face1_id,
+            #            photo_document.c.doc_id.notin_(
+            #                select(photo_document.c.doc_id).join(Face,
+            #                                                     Face.photo_id == photo_document.c.photo_id).filter(
+            #                    Face.id == Distance.face2_id))
+            #            ).join(face_table, face_table.id == Distance.face2_id).filter(
+            #     (face_table.x2 - face_table.x1) * (face_table.y2 - face_table.y1) > min_face_area,
+            #     face_table.is_side_view == False
+            # ).distinct().order_by(Photo.title).all()  # .order_by(Photo.title)
+
+            # Вариант 2 (c двумя представлениями для Face - self.FaceView и для Distance - self.DistanceView)
+            photos_faces = session.query(Photo, self.FaceView).join(self.FaceView). \
+                join(self.DistanceView, self.FaceView.id == self.DistanceView.face1_id, ). \
+                filter(self.DistanceView.distance < threshold) \
+                .distinct().order_by(Photo.title).all()  # .order_by(Photo.title)
+
             return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos_faces]
 
-    def get_group_photo_with_face(self, origin_face, threshold, min_face_area):
+    def get_group_photo_with_face(self, origin_face, threshold, min_face_area=MIN_FACE_AREA):
         """
             Получаем фото группы
                 origin_face - id лица, которое образовало группу
                 threshold - пороговое значение для расстояния между векторами лиц
-                min_face_area - пороговое значение для площади лица
+                min_face_area - пороговое значение для площади лица(используется если запрос строится без self.FaceView)
             Возвращает список словарей вида:
             {
              'photo': {'id': str, 'title': str, 'docs': [int]},
@@ -314,21 +432,42 @@ class DBManager:
             }
          """
         with self.Session() as session:
-            # origin_photo = session.query(Photo).get(origin_photo)
+            # # Вариант 1 (без представлений)
+            # # origin_photo = session.query(Photo).get(origin_photo)
+            # origin_face = session.query(Face).get(origin_face)
+            # photos = session.query(Photo, Face).join(Face). \
+            #     filter((Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area
+            #            , Face.is_side_view == False
+            #            ). \
+            #     join(photo_document).filter(Face.id == Distance.face2_id,
+            #                                 # Distance.face1_id.in_([f.id for f in origin_photo.faces]),
+            #                                 Distance.face1_id == origin_face.id,
+            #                                 Distance.distance < threshold,
+            #                                 Distance.face2_id < Distance.face1_id,  # ?
+            #                                 Distance.face1_id != Distance.face2_id,
+            #                                 photo_document.c.doc_id.notin_([d.id for d in origin_face.photo.docs])). \
+            #     distinct().group_by(Photo.id).all()  # group_by(Photo.id)
+
+            # Вариант 2 (c представлением для Face - self.FaceView)
             origin_face = session.query(Face).get(origin_face)
-            photos = session.query(Photo, Face).join(Face). \
-                filter((Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area
-                       , Face.is_side_view == False
-                       ). \
-                join(photo_document).filter(Face.id == Distance.face2_id,
+            photos = session.query(Photo, self.FaceView).join(self.FaceView). \
+                join(photo_document).filter(self.FaceView.id == Distance.face2_id,
                                             # Distance.face1_id.in_([f.id for f in origin_photo.faces]),
                                             Distance.face1_id == origin_face.id,
                                             Distance.distance < threshold,
                                             Distance.face2_id < Distance.face1_id,  # ?
-                                            Distance.face1_id != Distance.face2_id,
                                             photo_document.c.doc_id.notin_([d.id for d in origin_face.photo.docs])). \
                 distinct().group_by(Photo.id).all()  # group_by(Photo.id)
-            print(photos)
+
+            # # Вариант 3 (c двумя представлениями для Face - self.FaceView и для Distance - self.DistanceView)
+            # origin_face = session.query(Face).get(origin_face)
+            # photos = session.query(Photo, self.FaceView).join(self.FaceView). \
+            #     join(self.DistanceView, self.FaceView.id == self.DistanceView.face2_id).filter(
+            #     self.DistanceView.face1_id == origin_face.id,
+            #     self.DistanceView.distance < threshold,
+            # ). \
+            #     distinct().group_by(Photo.id).all()  # group_by(Photo.id)
+
             return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos]
 
 
@@ -345,11 +484,16 @@ if __name__ == "__main__":
     # manager.calculate_distance_matrix(process_count=10)
     #
     # # manager.delete_all_data_in_table(Distance)
-    #
-    # # manager.get_all_unique_face_group(threshold=0.08)
-    # # manager.test()
-    # # manager.get_photo_group_list_of_similar(0.1, 400)
-    # # manager.get_group_photo_with_face(14, 0.3)
+    p_time_start = time.time()
+    # result = manager.get_photo_group_list_of_similar(0.3, 650)
+    result = manager.get_group_photo_with_face(3738, 0.3, 650)
+    print('Process time: ', time.time() - p_time_start)
+    print('ALL-COUNT: ', len(result))
+    i = 0
+    for r in result:
+        i += 1
+    print('I: ', i)
+    # manager.get_group_photo_with_face(14, 0.3)
 
     # # img_path = '/photo/3/3746c174a92b48ed4929dfe4ffaafda7d931629e.jpeg'
     # # img_path = '/photo/6/6ac86c8c1fae77b67adada7372464be4e941ada3.jpeg'
@@ -403,7 +547,7 @@ if __name__ == "__main__":
     #                                                  face['landmarks']['mouth_right'], face['landmarks']['mouth_left'],
     #                                                  face['landmarks']['left_eye'], face['landmarks']['right_eye']))
     #     crop_img.show()
-
+    del manager
     end_time = time.time()
     print("time in second: ", end_time - start_time, "\ntime in min: ", (end_time - start_time) / 60)
 

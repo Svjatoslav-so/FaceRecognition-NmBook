@@ -12,8 +12,6 @@ from flask import Flask, render_template, request, abort, jsonify, send_from_dir
 import tool_module
 from dbManager import DBManager
 
-MIN_FACE_AREA = 650
-
 app = Flask(__name__)
 
 app.secret_key = os.environ.get('secret_key')
@@ -109,7 +107,7 @@ def smart_group_viewer():
             database = common_context()['dbs'][0]
             session['db'] = database
         manager = DBManager(f"./db/{database}.db")
-        groups = manager.get_photo_group_list_of_similar(threshold, MIN_FACE_AREA)
+        groups = manager.get_photo_group_list_of_similar(threshold)
         # print('END')
         return render_template('smart-viewer.html', **{'groups': groups,
                                                        'threshold': threshold,
@@ -137,7 +135,7 @@ def get_group():
             database = common_context()['dbs'][0]
             session['db'] = database
         manager = DBManager(f"./db/{database}.db")
-        group = manager.get_group_photo_with_face(origin_face_id, threshold, MIN_FACE_AREA)
+        group = manager.get_group_photo_with_face(origin_face_id, threshold)
         result = {
             'origin_photo_block': render_template('origin-photo-block.html',
                                                   **{'origin_photo_id': origin_photo_id,
