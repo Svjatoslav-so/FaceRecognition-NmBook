@@ -10,11 +10,19 @@
     <link rel="stylesheet" href="{{url_for('static', filename='css/style.css')}}">
 </head>
 <body>
+    <!-- Прелоадер -->
+    <div class="preloader">
+      <div class="preloader__image">
+      </div>
+    </div>
+    <!-- -------- -->
+
     <div class="main_panel">
         <ul class="main_menu">
             <li><a href="{{url_for('home')}}">Главная</a></li>
             <li><a href="{{url_for('group_viewer')}}">Просмотр Групп (old)</a></li>
             <li><a href="{{url_for('smart_group_viewer')}}">Просмотр Групп</a></li>
+            <li><a href="{{url_for('bookmark_group_viewer')}}">Закладки</a></li>
         </ul>
         <label>База данных :
             <select class="db_select" name="db" id="db">

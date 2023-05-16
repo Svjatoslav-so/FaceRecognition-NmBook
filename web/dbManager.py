@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+import threading
 import time
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from sqlalchemy.sql import table
 from tqdm import tqdm
 
 import tool_module
-
+from web.resultDBManager import ResultDBManager
 
 MIN_FACE_AREA = 650
 
@@ -170,6 +171,8 @@ def view(name, metadata, selectable):
         metadata, "before_drop", DropView(name).execute_if(callable_=view_exists)
     )
     return t
+
+
 # ---------------------------------------------------------------
 
 
@@ -418,7 +421,42 @@ class DBManager:
 
             return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos_faces]
 
-    def get_group_photo_with_face(self, origin_face, threshold, min_face_area=MIN_FACE_AREA):
+    @staticmethod
+    def _get_bookmarked(db: str, origin_photo_id: str, origin_face_x1: float, origin_face_y1: float,
+                        origin_face_x2: float, origin_face_y2: float, result_list: list = None):
+        """
+            Используется в get_group_photo_with_face для получения списка закладок для origin_photo
+
+            db: str - расположение базы данных с закладками,
+            origin_photo_id: str - id origin_photo фото,
+            origin_face_x1: float - координата лица с origin_photo,
+            origin_face_y1: float - координата лица с origin_photo,
+            origin_face_x2: float - координата лица с origin_photo,
+            origin_face_y2: float - координата лица с origin_photo,
+            result_list: list = None - контейнер для результатов
+
+            Может быть использован в отдельном потоке, тогда результат будет помещен в result_list (если он передан)
+            Возвращает список словарей описывающих фото из закладок, похожие на origin_photo.
+            Структура такая:
+            [{
+                'id': id-лица, в базе данных закладок!!!,
+                'photo_id': id-фото ,
+                'x1': x1 - координата лица,
+                'y1': y1 - координата лица,
+                'x2': x2 - координата лица,
+                'y2': y2 - координата лица,
+                'photo_title': подпись к фото,
+                'docs': строка с номерами документов к которым относится фото
+            }]
+        """
+        result_manager = ResultDBManager(db)
+        similar = result_manager.get_all_similar_of(origin_photo_id, origin_face_x1, origin_face_y1, origin_face_x2,
+                                                    origin_face_y2)
+        if not (result_list is None):
+            result_list.extend(similar)
+        return similar
+
+    def get_group_photo_with_face(self, origin_face, threshold, min_face_area=MIN_FACE_AREA, bookmarks_db=None):
         """
             Получаем фото группы
                 origin_face - id лица, которое образовало группу
@@ -428,13 +466,26 @@ class DBManager:
             {
              'photo': {'id': str, 'title': str, 'docs': [int]},
              'face':
-                {'id': int, 'embedding': [float], 'x1': float, 'y1': float, 'x2': float, 'y2': float, 'photo_id': str}
+                {'id': int, 'embedding': [float], 'x1': float, 'y1': float, 'x2': float, 'y2': float, 'photo_id': str},
+             'is_bookmarked': bool
             }
          """
         with self.Session() as session:
+            origin_face = session.query(Face).get(origin_face)
+            bookmarked_similar = list()
+            t1 = None
+            if bookmarks_db:
+                t1 = threading.Thread(target=self._get_bookmarked, kwargs={'db': bookmarks_db,
+                                                                           'origin_photo_id': origin_face.photo_id,
+                                                                           'origin_face_x1': origin_face.x1,
+                                                                           'origin_face_y1': origin_face.y1,
+                                                                           'origin_face_x2': origin_face.x2,
+                                                                           'origin_face_y2': origin_face.y2,
+                                                                           'result_list': bookmarked_similar})
+                t1.start()
+
             # # Вариант 1 (без представлений)
             # # origin_photo = session.query(Photo).get(origin_photo)
-            # origin_face = session.query(Face).get(origin_face)
             # photos = session.query(Photo, Face).join(Face). \
             #     filter((Face.x2 - Face.x1) * (Face.y2 - Face.y1) > min_face_area
             #            , Face.is_side_view == False
@@ -449,7 +500,6 @@ class DBManager:
             #     distinct().group_by(Photo.id).all()  # group_by(Photo.id)
 
             # Вариант 2 (c представлением для Face - self.FaceView)
-            origin_face = session.query(Face).get(origin_face)
             photos = session.query(Photo, self.FaceView).join(self.FaceView). \
                 join(photo_document).filter(self.FaceView.id == Distance.face2_id,
                                             # Distance.face1_id.in_([f.id for f in origin_photo.faces]),
@@ -460,15 +510,30 @@ class DBManager:
                 distinct().group_by(Photo.id).all()  # group_by(Photo.id)
 
             # # Вариант 3 (c двумя представлениями для Face - self.FaceView и для Distance - self.DistanceView)
-            # origin_face = session.query(Face).get(origin_face)
             # photos = session.query(Photo, self.FaceView).join(self.FaceView). \
             #     join(self.DistanceView, self.FaceView.id == self.DistanceView.face2_id).filter(
             #     self.DistanceView.face1_id == origin_face.id,
             #     self.DistanceView.distance < threshold,
             # ). \
             #     distinct().group_by(Photo.id).all()  # group_by(Photo.id)
+            if t1:
+                t1.join()
+            print('BOOKMARKED_SIMILAR: ', bookmarked_similar)
 
-            return [{'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict()} for p, f in photos]
+            group = []
+            for p, f in photos:
+                photo_with_face = {'photo': p.to_dict_with_relationship(face=False), 'face': f.to_dict(),
+                                   'is_bookmarked': False}
+                for b in bookmarked_similar:
+                    if b['photo_id'] == p.id \
+                            and b['x1'] == f.x1 \
+                            and b['y1'] == f.y1 \
+                            and b['x2'] == f.x2 \
+                            and b['y2'] == f.y2:
+                        photo_with_face['is_bookmarked'] = True
+                        break
+                group.append(photo_with_face)
+            return group
 
 
 if __name__ == "__main__":

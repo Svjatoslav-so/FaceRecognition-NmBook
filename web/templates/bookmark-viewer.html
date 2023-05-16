@@ -1,0 +1,57 @@
+{% extends "base_template.html" %}
+{% block css_before %}
+<link  rel="stylesheet"  href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.css">
+{% endblock %}
+
+{% block main_block %}
+    <div class="content">
+        <div class="control_panel">
+            <div class="origin_figure" id="origin_photo_block">
+            </div>
+            <div class="group_manager">
+                <div class="group_title">
+                    <h3>Группы</h3> <span id="all_group_count">всего: {{groups|length}}</span>
+                </div>
+                <div class="group_list">
+                    <ul id="group_list" tabindex="0">
+                        {% for i in range(groups|length) %}
+                            <li class="group_li {{ 'active' if i == 0 }}"
+                            data-origin_photo-id="{{ groups[i]['photo_id'] }}"
+                            data-origin_photo-title="{{ groups[i]['photo_title'] }}"
+                            data-origin_photo-docs="{{ groups[i]['docs'] }}"
+                            data-origin_face-x1="{{groups[i]['x1']}}"
+                            data-origin_face-y1="{{groups[i]['y1']}}"
+                            data-origin_face-x2="{{groups[i]['x2']}}"
+                            data-origin_face-y2="{{groups[i]['y2']}}"
+                            >
+                                <p>{{i+1}} {{ groups[i]['photo_title']|truncate(20, True, '...', 0) if groups[i]['photo_title'] }}</p>
+    <!--                            <p>Количество фото в группе</p>-->
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+
+        </div>
+        <div class="view_panel">
+            <div class="smart_viewer" id="viewer">
+            </div>
+        </div>
+    </div>
+
+    <div class="right-menu" id="right-menu">
+            <ul id="right-menu-items">
+                <li>
+                    <button type="button" onclick="deleteBookmark(this)">
+                        <span>Удалить</span>
+                    </button>
+                </li>
+            </ul>
+    </div>
+{% endblock %}
+
+{% block js_after %}
+    <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.umd.js"></script>
+    <script src="{{url_for('static', filename='js/bookmark-viewer-script.js')}}"></script>
+{% endblock %}

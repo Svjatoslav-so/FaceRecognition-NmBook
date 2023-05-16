@@ -48,9 +48,31 @@
 
         </div>
         <div class="view_panel">
-            <div class="viewer" id="viewer">
+            <div class="bookmark_menu" id="bookmark_menu">
+                <div>
+                    <button type="button" id="close-bookmark_menu-btn" title="Закрыть">
+                        <img src="{{url_for('static', filename='img/close.png')}}" alt="Закрыть">
+                    </button>
+                    <span>Выбрано: </span>
+                    <span id="checked-photo-count"></span>
+                </div>
+                <div>
+                    <button type="button" id="add-bookmark-btn" title="Добавить в закладки">
+                        <img src="{{url_for('static', filename='img/add-bookmark.png')}}" alt="Добавить в закладки">
+                    </button>
+                    <button type="button" id="delete-bookmark-btn" title="Удалить из закладок">
+                        <img src="{{url_for('static', filename='img/delete-bookmark.png')}}" alt="Удалить из закладок">
+                    </button>
+                </div>
+            </div>
+            <div class="smart_viewer" id="viewer">
             </div>
         </div>
+    </div>
+
+    <div class="right-menu" id="right-menu">
+            <ul id="right-menu-items">
+            </ul>
     </div>
 {% endblock %}
 
