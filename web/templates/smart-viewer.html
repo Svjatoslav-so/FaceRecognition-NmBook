@@ -1,4 +1,7 @@
 {% extends "base_template.html" %}
+
+{% block title_before %}<title>Group-viewer</title>{% endblock %}
+
 {% block css_before %}
 <link  rel="stylesheet"  href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0/dist/panzoom/panzoom.css">
 {% endblock %}
@@ -7,13 +10,13 @@
     <div class="content">
         <div class="control_panel">
             <div class="origin_figure" id="origin_photo_block">
-<!--                <div class="caption">-->
-<!--                    <p class="person_name">{{groups[0]['photo']['title']}}</p>-->
-<!--                    <p class="document_id">id:{% for doc in groups[0]['photo']['docs']%} {{ doc['id']}} {% endfor %} </p>-->
-<!--                </div>-->
-<!--                <div>-->
-<!--                    <img src="{{url_for('img_show', path_to_img='static/out/photo/'+ groups[0]['photo']['id'][0] +'/'+ groups[0]['photo']['id'] +'.jpeg')}}" alt="Искомое фото">-->
-<!--                </div>-->
+                {# <!--<div class="caption">-->
+                <!--    <p class="person_name">{{groups[0]['photo']['title']}}</p>-->
+                <!--    <p class="document_id">id:{% for doc in groups[0]['photo']['docs']%} {{ doc['id']}} {% endfor %} </p>-->
+                <!--</div>-->
+                <!--<div>-->
+                <!--    <img src="{{url_for('img_show', path_to_img='static/out/photo/'+ groups[0]['photo']['id'][0] +'/'+ groups[0]['photo']['id'] +'.jpeg')}}" alt="Искомое фото">-->
+                <!--</div>--> #}
             </div>
             <div class="group_manager">
                 <div class="group_title">

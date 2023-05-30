@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>NmBookPhoto</title>
+    {% block title_before %}<title>NmBookPhoto</title>{% endblock %}
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="{{url_for('static', filename='css/reset.css')}}">
     {% block css_before %}
@@ -19,10 +19,10 @@
 
     <div class="main_panel">
         <ul class="main_menu">
-            <li><a href="{{url_for('home')}}">Главная</a></li>
-            <li><a href="{{url_for('group_viewer')}}">Просмотр Групп (old)</a></li>
-            <li><a href="{{url_for('smart_group_viewer')}}">Просмотр Групп</a></li>
-            <li><a href="{{url_for('bookmark_group_viewer')}}">Закладки</a></li>
+            <li><a {% if current_page=='home' %} class="active" {% endif %} href="{{url_for('home')}}">Главная</a></li>
+<!--            <li><a {% if current_page=='group_viewer' %} class="active" {% endif %} href="{{url_for('group_viewer')}}">Просмотр Групп (old)</a></li>-->
+            <li><a {% if current_page=='smart_group_viewer' %} class="active" {% endif %} href="{{url_for('smart_group_viewer')}}">Просмотр Групп</a></li>
+            <li><a {% if current_page=='bookmark_group_viewer' %} class="active" {% endif %} href="{{url_for('bookmark_group_viewer')}}">Закладки</a></li>
         </ul>
         <label>База данных :
             <select class="db_select" name="db" id="db">

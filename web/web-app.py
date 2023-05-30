@@ -2,13 +2,18 @@ import base64
 import json
 import os
 import pathlib
+import sys
 import traceback
 from io import BytesIO
 from pathlib import Path
 
+# print('NAME: ', __name__, 'FILE: ', __file__)
 import cv2
 from PIL import Image, ImageDraw, ImageOps
 from flask import Flask, render_template, request, abort, jsonify, send_from_directory, session, redirect, url_for
+
+# для нормального импорта модулей ниже, когда скрипт запускается из директории web
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 import tool_module
 from web.dbManager import DBManager
@@ -21,10 +26,14 @@ BOOKMARKS_DB = 'NmBookPhoto-result.db'
 app.secret_key = os.environ.get('secret_key')
 
 
+# print('SecretKey: ', app.secret_key)
+
+
 @app.context_processor
 def common_context():
     # определение пути
     current_dir = pathlib.Path('./db/')
+    # print('CURRENT_DIR: ', current_dir.absolute())
     # определение шаблона
     db_pattern = "*profile.db"
     dbs = []
@@ -35,13 +44,13 @@ def common_context():
 
 @app.route("/")
 def home():
-    return render_template('home.html')
+    return render_template('home.html', **{'current_page': 'home'})
 
 
 # old
 @app.route("/group_viewer")
 def group_viewer():
-    return render_template('group-viewer.html')
+    return render_template('group-viewer.html', **{'current_page': 'group_viewer'})
 
 
 # old
@@ -106,17 +115,25 @@ def smart_group_viewer():
         # print('START', request)
         threshold = request.args.get('threshold', 0.2)
         # print('threshold', threshold)
-        database = session.get('db', common_context()['dbs'][0])
-        if not (database in common_context()['dbs']):
-            database = common_context()['dbs'][0]
-            session['db'] = database
-        manager = DBManager(f"./db/{database}.db")
-        groups = manager.get_photo_group_list_of_similar(threshold)
+        if common_context()['dbs']:
+            manager = DBManager(f"./db/{get_db()}.db")
+            groups = manager.get_photo_group_list_of_similar(threshold)
+        else:
+            groups = []
         # print('END')
         return render_template('smart-viewer.html', **{'groups': groups,
                                                        'threshold': threshold,
+                                                       'current_page': 'smart_group_viewer'
                                                        })
     return redirect(url_for('home'))
+
+
+def get_db():
+    database = session.get('db', common_context()['dbs'][0])
+    if not (database in common_context()['dbs']):
+        database = common_context()['dbs'][0]
+        session['db'] = database
+    return database
 
 
 @app.route("/get_group")
@@ -133,13 +150,11 @@ def get_group():
         origin_photo_y2 = float(request.args.get('origin_photo_y2', 0))
 
         print(origin_face_id, origin_photo_title, origin_photo_docs)
-
-        database = session.get('db', common_context()['dbs'][0])
-        if not (database in common_context()['dbs']):
-            database = common_context()['dbs'][0]
-            session['db'] = database
-        manager = DBManager(f"./db/{database}.db")
-        group = manager.get_group_photo_with_face(origin_face_id, threshold, bookmarks_db=BOOKMARKS_DB)
+        if common_context()['dbs']:
+            manager = DBManager(f"./db/{get_db()}.db")
+            group = manager.get_group_photo_with_face(origin_face_id, threshold, bookmarks_db=BOOKMARKS_DB)
+        else:
+            group = []
         result = {
             'origin_photo_block': render_template('origin-photo-block.html',
                                                   **{'origin_photo_id': origin_photo_id,
@@ -193,14 +208,9 @@ def add_bookmark():
         origin_photo = json.loads(request.args.get('origin_photo', None))
         similar_photos = json.loads(request.args.get('similar_photos', None))
         try:
-            if origin_photo and similar_photos:
-                database = session.get('db', common_context()['dbs'][0])
-                if not (database in common_context()['dbs']):
-                    database = common_context()['dbs'][0]
-                    session['db'] = database
-
+            if origin_photo and similar_photos and common_context()['dbs']:
                 manager = ResultDBManager(BOOKMARKS_DB)
-                manager.add_bookmarks(origin=origin_photo, similar=similar_photos, db=database)
+                manager.add_bookmarks(origin=origin_photo, similar=similar_photos, db=get_db())
             return jsonify({"status": "ok"})
         except Exception as e:
             print('Error: ', e, '\n', traceback.format_exc())
@@ -231,7 +241,7 @@ def bookmark_group_viewer():
     if request.method == 'GET':
         manager = ResultDBManager(BOOKMARKS_DB)
         groups = manager.get_all_bookmark_groups()
-        return render_template('bookmark-viewer.html', **{'groups': groups})
+        return render_template('bookmark-viewer.html', **{'groups': groups, 'current_page': 'bookmark_group_viewer'})
     return redirect(url_for('home'))
 
 

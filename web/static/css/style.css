@@ -36,6 +36,10 @@ body {
     color: #BDB598;
 }
 
+.main_menu a.active {
+    color: white;
+}
+
 .main_menu a:hover {
     color: #8A796A;
     /* color: rebeccapurple; */
