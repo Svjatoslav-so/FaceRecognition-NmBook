@@ -9,6 +9,7 @@ import face_recognition
 from PIL import Image, ImageDraw
 import numpy as np
 from deepface.commons import functions
+from face_recognition import face_locations
 from tqdm import tqdm
 
 import tool_module
@@ -47,9 +48,11 @@ def get_face_locations_by_deepface(known_img_path, need_show=False):
     return known_face_locations
 
 
-def all_fr_encodings_to_file(paths_to_photos, file_name='encodings.json'):
+def all_fr_encodings_to_file(paths_to_photos, to_directory='', number_of_times_to_upsample=1, face_location_model="hog",
+                             num_jitters=1, face_encoding_model='large'):
     """
-        Записывает кодировки лиц(face_recognition) для всех фото из paths_to_photos в файл file_name в формате json:
+        Записывает кодировки лиц(face_recognition) для всех фото из paths_to_photos в файл в папку to_directory
+        в формате json:
         {
             "path": str(путь к файлу),
             "faces": {
@@ -57,16 +60,30 @@ def all_fr_encodings_to_file(paths_to_photos, file_name='encodings.json'):
                 "encoding": (вектор кодировки лица)
             }
         }
+        number_of_times_to_upsample - How many times to upsample the image looking for faces.
+                                      Higher numbers find smaller faces.
+        face_location_model - Which face detection model to use. "hog" is less accurate but faster on CPUs.
+                              "cnn" is a more accurate deep-learning model which is GPU/CUDA accelerated (if available).
+                               The default is "hog".
+        num_jitters - How many times to re-sample the face when calculating encoding. Higher is more accurate,
+                      but slower (i.e. 100 is 100x slower)
+        face_encoding_model - Optional - which model to use. "large" (default) or "small" which only returns 5 points
+                              but is faster.
     """
+    file_name = f'{to_directory}/face_recognition({number_of_times_to_upsample}&{face_location_model}-{num_jitters}&{face_encoding_model})encodings.json'
     if not os.path.exists(file_name):
         with Path(file_name).open('x', encoding="utf8") as f:
             i = 0
             data = []
             for path in tqdm(paths_to_photos):
                 img = face_recognition.load_image_file(path)
-                known_face_locations = get_face_locations_by_deepface(path)
+                if face_location_model == 'cnn':  # на моем компе cnn встроенная в библиотеку вылетает, поэтому так
+                    known_face_locations = get_face_locations_by_deepface(path)
+                else:
+                    known_face_locations = face_locations(img, number_of_times_to_upsample=number_of_times_to_upsample,
+                                                          model=face_location_model)
                 img_encodings = face_recognition.face_encodings(img, known_face_locations=known_face_locations,
-                                                                model='large')
+                                                                num_jitters=num_jitters, model=face_encoding_model)
                 data.append({"path": str(path),
                              "faces": list(map(lambda fa, e: {"face_area": fa, "encoding": e.tolist()},
                                                known_face_locations,
@@ -78,10 +95,10 @@ def all_fr_encodings_to_file(paths_to_photos, file_name='encodings.json'):
         raise Exception(f'File "{file_name}" already exists')
 
 
-def group_similar_faces(encodings_file='encodings.json', result_file='result.json', tolerance=0.4):
+def group_similar_faces(encodings_file, result_directory='', tolerance=0.6):
     """
-        Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл result_file
-        в формате:
+        Группирует схожие фото из файла с их кодировками(encodings_file). Результат записывает в json-файл
+        в папке result_directory в формате:
          {
            "origin": str(путь к искомому фото), # сравниваемое фото
            "similar": list[{"path": str(путь к найденному фото),
@@ -93,6 +110,7 @@ def group_similar_faces(encodings_file='encodings.json', result_file='result.jso
         Сравнение идет по всем лицам которые были распознаны на сравниваемом фото
         tolerance - точность, чем меньше тем точнее
     """
+    result_file = f'{result_directory}/{encodings_file.split("/")[-1].replace("encodings.json","")}result.json'
     with Path(encodings_file).open(encoding="utf8") as ef, Path(result_file).open('x', encoding="utf8") as rf:
         data = json.load(ef)
         result = []
@@ -118,7 +136,7 @@ def group_similar_faces(encodings_file='encodings.json', result_file='result.jso
         json.dump(result, rf, indent=4)
 
 
-def find_similar_faces(known_img_path, encodings_file='encodings.json', tolerance=0.4):
+def find_similar_faces(known_img_path, encodings_file='encodings.json', tolerance=0.6):
     """Возвращает список фото из файла с их кодировками(encodings_file) схожих с known_img_path с точностью tolerance"""
     known_img = face_recognition.load_image_file(known_img_path)
     # known_face_locations = face_recognition.face_locations(known_img, model='cnn')
@@ -167,23 +185,38 @@ if __name__ == '__main__':
     # img.show()
 
     # directory = 'D:/FOTO/Original photo/Olympus'
-    # directory = '../Test_photo/Test_1-Home_photos'
+    directory = '../Test_photo/Test_1-Home_photos'
     # directory = 'D:/FOTO/Original photo/Moto'
-    directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out/photo'
+    # directory = 'D:/Hobby/NmProject/nmbook_photo/web/static/out/photo'
     # directory = 'D:/FOTO/Original photo/Saved Pictures/Фото cкачаные с GooglePhoto'
     # p_paths = get_all_photo_in_directory(directory, '*.jpg')
     p_paths = tool_module.get_all_file_in_directory(directory)
     # p_paths = get_photo_paths()
     c_directory_path = Path(directory)
-    if False:
-        # similar_faces = find_similar_faces(k_img_path, 'D:/FOTO/Original photo/Olympus/encodings.json')
-        similar_faces = find_similar_faces(k_img_path, directory + '/fr_encodings.json')
-        print('Similar faces: ', similar_faces)
-        tool_module.show_photo(similar_faces)
-    if True:
-        all_fr_encodings_to_file(p_paths, directory + '/fr_encodings.json')
-    if True:
-        group_similar_faces(directory + '/fr_encodings.json', directory + '/fr_result.json')
+    # if False:
+    #     # similar_faces = find_similar_faces(k_img_path, 'D:/FOTO/Original photo/Olympus/encodings.json')
+    #     similar_faces = find_similar_faces(k_img_path, directory + '/fr_encodings.json')
+    #     print('Similar faces: ', similar_faces)
+    #     tool_module.show_photo(similar_faces)
+    # if False:
+    #     all_fr_encodings_to_file(p_paths, directory, number_of_times_to_upsample=1, face_location_model="hog",
+    #                              num_jitters=1, face_encoding_model='small')
+    # if True:
+    #     for e in ['/face_recognition(1&cnn-1&large)encodings.json', '/face_recognition(1&hog-1&large)encodings.json',
+    #               '/face_recognition(1&cnn-1&small)encodings.json', '/face_recognition(1&hog-1&small)encodings.json']:
+    #         group_similar_faces(directory + e, directory, tolerance=0.4)
+
+    for p in p_paths:
+        img = face_recognition.load_image_file(p)
+        locations = face_locations(img, number_of_times_to_upsample=1, model='hog')
+        if locations:
+            img_p = Image.open(p)
+            draw1 = ImageDraw.Draw(img_p)
+            for (top, right, bottom, left) in locations:
+                draw1.rectangle((left, top, right, bottom), outline=(250, 0, 0), width=5)
+            img_p.show()
+        else:
+            print(p)
 
     end_time = time.time()
     print("time in second: ", end_time - start_time, "\ntime in min: ", (end_time - start_time) / 60)
