@@ -590,19 +590,23 @@ body {
     right: 0;
     bottom: 0;
     overflow: hidden;
-    background: #fff;
+    /* background: #918b75; */
+    background: radial-gradient(black 200px, #574B40);
     z-index: 1001;
   }
   
   .preloader__image {
     position: relative;
-    top: 50%;
+    top: 50%; 
     left: 50%;
-    width: 64px;
-    height: 64px;
-    margin-top: -32px;
-    margin-left: -32px;
-    background: url('preloader.gif') no-repeat 50% 50%; /*расположение (url) изображения gif и др. параметры*/
+    width: 200px;
+    /* height: 100%; */
+    margin-top: -100px; 
+    margin-left: -100px;
+    background: url(/static/img/preloader.gif) no-repeat 50% 50%; /*расположение (url) изображения gif и др. параметры*/
+    background-size: cover;
+    border-radius: 50%;
+    aspect-ratio: 1 / 1;
   }
   
   .loaded_hiding .preloader {

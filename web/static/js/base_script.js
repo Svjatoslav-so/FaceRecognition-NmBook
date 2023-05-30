@@ -1,10 +1,15 @@
 /*--------------------- Preloader -----------------------*/
 window.onload = function () {
+    console.log("LOAD");
     document.body.classList.add('loaded_hiding');
     window.setTimeout(function () {
         document.body.classList.add('loaded');
         document.body.classList.remove('loaded_hiding');
     }, 500);
+}
+window.onbeforeunload = function () {
+    console.log("BEFOREUNLOAD");
+    document.body.classList.remove('loaded');
 }
 /*-------------------------------------------------------*/
 

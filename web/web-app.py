@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageOps
 from flask import Flask, render_template, request, abort, jsonify, send_from_directory, session, redirect, url_for
 
 import tool_module
-from dbManager import DBManager
+from web.dbManager import DBManager
 from web.resultDBManager import ResultDBManager
 
 app = Flask(__name__)
