@@ -35,7 +35,7 @@ def common_context():
     current_dir = pathlib.Path('./db/')
     # print('CURRENT_DIR: ', current_dir.absolute())
     # определение шаблона
-    db_pattern = "*profile.db"
+    db_pattern = "*.db"
     dbs = []
     for file in current_dir.glob(db_pattern):
         dbs.append(file.name.split('.')[0])
