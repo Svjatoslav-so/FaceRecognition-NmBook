@@ -24,7 +24,7 @@ def cli():
 
 
 @cli.command()
-@click.argument('model', default=MODELS[8], help='Модель распознавания лиц.')
+@click.argument('model', default=MODELS[8])
 @click.option('--detector_backend', '-d_back', default=DETECTOR_BACKEND[0], help='Детектор определения лиц.')
 def create_db(model, detector_backend):
     """ Создает базу данных для модели распознавания лиц MODEL с использованием DETECTOR_BACKEND """
