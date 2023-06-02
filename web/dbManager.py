@@ -242,8 +242,14 @@ class DBManager:
         """
         with self.Session() as session:
             with Path(embedding_file).open(encoding="utf8") as ef, Path(metadata_file).open(encoding="utf8") as mf:
-                data = json.load(ef)
-                metadata = json.load(mf)['by_photo']
+                try:
+                    data = json.load(ef)
+                except json.decoder.JSONDecodeError:
+                    raise ValueError(f'Не корректное содержимое файла {embedding_file}. Ожидается JSON.')
+                try:
+                    metadata = json.load(mf)['by_photo']
+                except json.decoder.JSONDecodeError:
+                    raise ValueError(f'Не корректное содержимое файла {metadata}. Ожидается JSON.')
 
                 for photo in data:
                     photo_obj = Photo(id=self._get_filename_from_path(photo['path']).split('.')[0],
@@ -340,20 +346,25 @@ class DBManager:
         process_list = []
         lock = multiprocessing.Lock()
         process_count, pt_count = tool_module.get_optimal_process_count(len(embeddings_dict), process_count)
-        for i in range(process_count):
-            process_list.append(multiprocessing.Process(target=self._calculating_process,
-                                                        kwargs={
-                                                            'e_dict': embeddings_dict,
-                                                            'cpd_range': (i * pt_count, i * pt_count + pt_count),
-                                                            'd_metric': distance_metric,
-                                                            'lock': lock,
-                                                            'disable': disable,
-                                                            'db_name': self.db_name,
-                                                            'commit_block_size': commit_block_size
-                                                        }))
-            process_list[i].start()
-        for p in process_list:
-            p.join()
+        try:
+            for i in range(process_count):
+                process_list.append(multiprocessing.Process(target=self._calculating_process,
+                                                            kwargs={
+                                                                'e_dict': embeddings_dict,
+                                                                'cpd_range': (i * pt_count, i * pt_count + pt_count),
+                                                                'd_metric': distance_metric,
+                                                                'lock': lock,
+                                                                'disable': disable,
+                                                                'db_name': self.db_name,
+                                                                'commit_block_size': commit_block_size
+                                                            }))
+                process_list[i].start()
+            for p in process_list:
+                p.join()
+        except KeyboardInterrupt as ki:
+            for p in process_list:
+                p.kill()
+            raise ki
         print("All process finished!")
 
     @staticmethod

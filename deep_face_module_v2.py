@@ -1,6 +1,7 @@
 """
     Данный модуль содержит вторую версию функций по распознаванию лиц на фото в основе которых лежит deepface
 """
+import functools
 import json
 import multiprocessing
 import os
@@ -282,11 +283,19 @@ def all_df_encodings_to_file(paths_to_photo, file_name='encodings.json', model_n
                        По умолчанию None - определяется автоматически(равно количеству логических ядер).
                        (Оптимальное количество 4).
         disable - если True, то прогресс-бар будет отключен.
+
+        Функция возвращает словарь:
+            {
+                file_name: имя файла в который записаны кодировки,
+                result: список кодировок (тот что записан в файл)
+            }
     """
     if detector_backends is None:
         detector_backends = ['retinaface', 'mtcnn']
+
+    d_backs_str = functools.reduce(lambda x, y: x+str(y)+'-', detector_backends, '')[:-1]
     name_start = file_name.rfind("/") + 1
-    file_name = file_name[:name_start] + f'dfv2_{model_name.lower()}_{file_name[name_start:]}'
+    file_name = file_name[:name_start] + f'dfv2_{model_name.lower()}_{d_backs_str}_{file_name[name_start:]}'
     if not os.path.exists(file_name):
         with Path(file_name).open('x', encoding="utf8") as f:
             all_data = []
@@ -297,29 +306,34 @@ def all_df_encodings_to_file(paths_to_photo, file_name='encodings.json', model_n
 
             target_size = functions.find_target_size(model_name=model_name)
             align = True
-
-            for i in range(process_count):
-                process_list.append(multiprocessing.Process(target=_encoding_process,
-                                                            kwargs={'paths': paths_to_photo[
-                                                                             i * pt_count: i * pt_count + pt_count],
-                                                                    'queue': queue,
-                                                                    'model_name': model_name,
-                                                                    'target_size': target_size,
-                                                                    'detector_backends': detector_backends,
-                                                                    'enforce_detection': enforce_detection,
-                                                                    'align': align,
-                                                                    'disable': disable}))
-                process_list[i].start()
-            for _ in range(process_count):
-                all_data.extend(queue.get())  # данные из очереди нужно извлечь до join()
-            for p in process_list:
-                p.join()
+            try:
+                for i in range(process_count):
+                    process_list.append(multiprocessing.Process(target=_encoding_process,
+                                                                kwargs={'paths': paths_to_photo[
+                                                                                 i * pt_count: i * pt_count + pt_count],
+                                                                        'queue': queue,
+                                                                        'model_name': model_name,
+                                                                        'target_size': target_size,
+                                                                        'detector_backends': detector_backends,
+                                                                        'enforce_detection': enforce_detection,
+                                                                        'align': align,
+                                                                        'disable': disable}))
+                    process_list[i].start()
+                for _ in range(process_count):
+                    all_data.extend(queue.get())  # данные из очереди нужно извлечь до join()
+                for p in process_list:
+                    p.join()
+            except KeyboardInterrupt as ki:
+                for p in process_list:
+                    p.kill()
+                raise ki
             print(f"All process finished!")
 
             json.dump(all_data, f, indent=4)
-            return all_data
+            return {'file_name': file_name, 'result': all_data}
+
     else:
-        raise Exception(f'File "{file_name}" already exists')
+        raise ValueError(f'File "{file_name}" already exists')
 
 
 def _group_process(origin_data, all_data, queue, threshold, distance_metric, disable):
