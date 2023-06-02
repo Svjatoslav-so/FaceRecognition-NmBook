@@ -267,6 +267,7 @@ class DBManager:
                     session.add(photo_obj)
 
                     for doc_id in metadata[self._get_filename_from_path(photo['path'])]['docs']:
+                        doc_id = doc_id.get('key', doc_id)
                         doc_obj = session.query(Document).get(doc_id)
                         if not doc_obj:
                             doc_obj = Document(id=doc_id)
