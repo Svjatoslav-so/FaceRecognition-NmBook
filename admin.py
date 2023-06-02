@@ -24,9 +24,10 @@ def cli():
 
 
 @cli.command()
-@click.argument('model', default=MODELS[8])
-@click.option('--detector_backend', '-d_back', default=DETECTOR_BACKEND[0])
+@click.argument('model', default=MODELS[8], help='Модель распознавания лиц.')
+@click.option('--detector_backend', '-d_back', default=DETECTOR_BACKEND[0], help='Детектор определения лиц.')
 def create_db(model, detector_backend):
+    """ Создает базу данных для модели распознавания лиц MODEL с использованием DETECTOR_BACKEND """
     click.echo(f'{Fore.YELLOW}START\nPress CTRL+C to quit{Style.RESET_ALL}', color=True)
     start_time = time.time()
 
@@ -83,7 +84,7 @@ def create_db(model, detector_backend):
     click.echo(f'{Fore.GREEN}Создание базы данных для выбранной модели: {Style.RESET_ALL}', color=True)
     if not (os.path.exists(DB_DIRECTORY)):
         os.mkdir(DB_DIRECTORY)
-    db_name = DB_DIRECTORY + f'NmBookPhoto({model}-{detector_backend}).db'
+    db_name = f'{DB_DIRECTORY}/NmBookPhoto({model}-{detector_backend}).db'
     create_model_db = True
     if os.path.exists(db_name):
         click.echo(f'{Fore.CYAN}WARNING: база данных {Fore.RED}{db_name}{Fore.CYAN} уже существует.{Style.RESET_ALL}')
