@@ -54,7 +54,7 @@ class Bookmark(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False, unique=True)
     origin_id = Column(Integer, ForeignKey('faces.id'), nullable=False)
     similar_id = Column(Integer, ForeignKey('faces.id'), nullable=False)
-    db = Column(Text)
+    db = Column(Text)  # комментарий к закладке
     origin = relationship("Face", primaryjoin="Bookmark.origin_id == Face.id")
     similar = relationship("Face", primaryjoin="Bookmark.similar_id == Face.id")
     idx_face1_face2_distance = Index('idx_origin_similar_db', origin_id, similar_id, db)
@@ -82,8 +82,8 @@ class ResultDBManager:
         """
         with self.Session() as session:
             session.expire_on_commit = False
-            face = session.query(Face).filter(Face.photo_id == photo_id, Face.x1 == x1, Face.y1 == y1, Face.x2 == x2,
-                                              Face.y2 == y2).first()
+            face = session.query(Face).filter(Face.photo_id == photo_id, Face.x1 == x1, Face.y1 == y1,
+                                              Face.x2 == x2, Face.y2 == y2).first()
             if not face:
                 face = Face(photo_id=photo_id, x1=x1, y1=y1, x2=x2,
                             y2=y2, photo_title=photo_title, docs=docs)
@@ -96,10 +96,10 @@ class ResultDBManager:
                               'photo_title': str, 'docs': str],
                       similar: list[dict['photo_id': str, 'x1': float, 'y1': float, 'x2': float, 'y2': float,
                                     'photo_title': str, 'docs': str]],
-                      db: str = ''):
+                      comment: str = ''):
         """
             Добавляет закладки.
-            Для origin-лица ставятся в соответствие лица из similar. db - значение для поля db таблицы bookmarks
+            Для origin-лица ставятся в соответствие лица из similar. comment - комментарий к закладкам
         """
         with self.Session() as session:
             origin_face = self.get_or_create_face(photo_id=origin['photo_id'],
@@ -117,7 +117,7 @@ class ResultDBManager:
                 bookmark = session.query(Bookmark).filter(Bookmark.origin_id == origin_face.id,
                                                           Bookmark.similar_id == s.id).first()
                 if not bookmark:
-                    bookmark = Bookmark(origin_id=origin_face.id, similar_id=s.id, db=db)
+                    bookmark = Bookmark(origin_id=origin_face.id, similar_id=s.id, db=comment)
                     new_bookmark.append(bookmark)
             session.add_all(new_bookmark)
             session.commit()
@@ -133,9 +133,9 @@ class ResultDBManager:
             y2 == origin_face_y2,
         """
         with self.Session() as session:
-            origin_face = session.query(Face).filter(Face.photo_id == origin_photo_id, Face.x1 == origin_face_x1,
-                                                     Face.y1 == origin_face_y1, Face.x2 == origin_face_x2,
-                                                     Face.y2 == origin_face_y2).first()
+            origin_face = session.query(Face).filter(Face.photo_id == origin_photo_id,
+                                                     Face.x1 == origin_face_x1, Face.y1 == origin_face_y1,
+                                                     Face.x2 == origin_face_x2, Face.y2 == origin_face_y2).first()
             if not origin_face:
                 return []
 
@@ -186,30 +186,60 @@ class ResultDBManager:
             groupmaker_faces = session.query(Face).filter(Face.id.in_(select(Bookmark.origin_id))).all()
             return [gf.to_dict() for gf in groupmaker_faces]
 
+    def get_comment_for_bookmark(self, origin_photo_id: str, origin_face_x1: float, origin_face_y1: float,
+                                 origin_face_x2: float, origin_face_y2: float, similar_photo_id: str,
+                                 similar_face_x1: float, similar_face_y1: float,
+                                 similar_face_x2: float, similar_face_y2: float):
+        with self.Session() as session:
+            origin_id = session.query(Face.id).filter(
+                                                      Face.photo_id == origin_photo_id,
+                                                      Face.x1 == origin_face_x1,
+                                                      Face.y1 == origin_face_y1,
+                                                      Face.x2 == origin_face_x2,
+                                                      Face.y2 == origin_face_y2)
+                                                      # Face.y2 == origin_face_y2).first()
+            # print('origin_id: ', origin_id)
+            similar_id = session.query(Face.id).filter(
+                                                       Face.photo_id == similar_photo_id,
+                                                       Face.x1 == similar_face_x1,
+                                                       Face.y1 == similar_face_y1,
+                                                       Face.x2 == similar_face_x2,
+                                                       Face.y2 == similar_face_y2)
+                                                       # Face.y2 == similar_face_y2).first()
+            # print('similar_id: ', similar_id)
+            comment = session.query(Bookmark.db).filter(
+                                                    Bookmark.origin_id.in_(origin_id),
+                                                    Bookmark.similar_id.in_(similar_id)
+                                                    ).first()
+            return comment[0] if comment and len(comment) else comment
+
 
 if __name__ == "__main__":
     print("START")
     start_time = time.time()
     manager = ResultDBManager('NmBookPhoto-result.db')
 
-    manager.add_bookmarks(
-        origin={'photo_id': '001385c7cfe3784ab9073d47a8088df015121838', 'x1': 489, 'y1': 844, 'x2': 508, 'y2': 868,
-                'photo_title': 'Священник Благовещенский Алексей Петрович', 'docs': '29'},
-        similar=[
-            {'photo_id': '0082eb3bcfdfa0488dadc7fe1b33625d8bbd0c7e', 'x1': 234, 'y1': 112, 'x2': 384,
-             'y2': 363,
-             'photo_title': 'Протоиерей Василий (Лихарев Василий Алексеевич), тюремная фотография.',
-             'docs': '69'},
-            {'photo_id': '00ed027911b0c2a9e199eecdbac3482b585da145', 'x1': 122, 'y1': 145, 'x2': 239,
-             'y2': 306,
-             'photo_title': 'Групповая фотография, 25 октября 1927 г.: Василий Павлович Коклин во втором ряду третий слева',
-             'docs': '29'},
-            {'photo_id': '00c192ad83bcb0025e7146d9fec5f442bdc45b71', 'x1': 1030, 'y1': 176, 'x2': 1148,
-             'y2': 336,
-             'photo_title': 'Игумен Дамаскин (Жабинский) и диакон Иосиф Потапов у гроба Матроны Андреевны Сахаровой. 31 ноября 1930 г.',
-             'docs': '29'}
-        ],
-        db='')
+    # manager.add_bookmarks(
+    #     origin={'photo_id': '001385c7cfe3784ab9073d47a8088df015121838', 'x1': 489, 'y1': 844, 'x2': 508, 'y2': 868,
+    #             'photo_title': 'Священник Благовещенский Алексей Петрович', 'docs': '29'},
+    #     similar=[
+    #         {'photo_id': '0082eb3bcfdfa0488dadc7fe1b33625d8bbd0c7e', 'x1': 234, 'y1': 112, 'x2': 384,
+    #          'y2': 363,
+    #          'photo_title': 'Протоиерей Василий (Лихарев Василий Алексеевич), тюремная фотография.',
+    #          'docs': '69'},
+    #         {'photo_id': '00ed027911b0c2a9e199eecdbac3482b585da145', 'x1': 122, 'y1': 145, 'x2': 239,
+    #          'y2': 306,
+    #          'photo_title': 'Групповая фотография, 25 октября 1927 г.: Василий Павлович Коклин во втором ряду третий слева',
+    #          'docs': '29'},
+    #         {'photo_id': '00c192ad83bcb0025e7146d9fec5f442bdc45b71', 'x1': 1030, 'y1': 176, 'x2': 1148,
+    #          'y2': 336,
+    #          'photo_title': 'Игумен Дамаскин (Жабинский) и диакон Иосиф Потапов у гроба Матроны Андреевны Сахаровой. 31 ноября 1930 г.',
+    #          'docs': '29'}
+    #     ],
+    #     comment='')
+
+    #print(manager.get_comment_for_bookmark('8d3a62e4f6ec49b86784c0030344305a69e8ff5e',129,124,253,274,
+    #                                 '3cbbd20f17e6b3c9185ca8d5007b8ba642143f3c', 235, 51, 285, 114))
 
     end_time = time.time()
     print("time in second: ", end_time - start_time, "\ntime in min: ", (end_time - start_time) / 60)

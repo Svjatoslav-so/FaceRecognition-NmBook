@@ -194,6 +194,7 @@ body {
 
 .f-panzoom {
     background: none;
+    border-radius: 25px;
 }
 
 .origin_figure img,
@@ -270,6 +271,56 @@ body {
     scroll-snap-type: y mandatory;
     border-radius: 2px;
 }
+
+.f-panzoom .comment_button{
+    border-radius: 25px;
+    width: 40px;
+    height: 40px;
+    padding: 5px;
+    border: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1;
+    display:none;
+    background: url(/static/img/comment.png) no-repeat 50% 50%;
+    background-color: #f5f4f4;
+}
+
+.f-panzoom .comment_viewer{
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    border-radius: 25px;
+    padding: 10px 20px;
+    background-color: #f5f4f4ad;
+    overflow: auto;
+}
+
+.f-panzoom .comment_viewer .comment_viewer__header{
+    display: flex;
+    justify-content: space-between;
+}
+.f-panzoom .comment_viewer .comment_viewer__header p{
+    text-decoration: underline;
+    color: #000000;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.f-panzoom .comment_viewer .comment_viewer__header .close_comment{
+    width: 35px;
+    height: 35px;
+    background: url(/static/img/close.png) no-repeat 50% 50%;
+}
+
+.f-panzoom:hover .comment_button{
+    display: block;
+}
+
 
 /*---------------------- Scroll Stiling --------------------- */
 /* Работает в Firefox */
@@ -511,6 +562,7 @@ body {
     display: none;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     background-color: transparent;
     border-bottom: 1px solid #8A796A;
     padding-bottom: 10px;
@@ -528,12 +580,31 @@ body {
     padding-right: 5px;
 }
 
+.bookmark_menu .comment_block{
+    flex-grow: 2;
+    justify-content: center;
+}
+
+.bookmark_menu textarea{
+    max-width: 600px;
+    padding: 5px 10px;
+    margin-left: 5px;
+    box-sizing: border-box;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background-color: #f5f4f4;
+    font-size: 16px;
+    resize: none;
+    flex-grow: 2;
+}
+
 .bookmark_menu button {
-    margin: 5px 20px;
+    margin: 5px 10px;
     border: none;
     background: transparent;
     padding: 0 10px;
     height: 50px;
+    min-width: 60px;
 }
 
 .bookmark_menu button img:hover {
@@ -622,3 +693,17 @@ body {
     display: none;
   }
 /*-------------------------------------------------------*/
+
+
+/*---------------------MEDIA-----------------------------*/
+
+@media screen and (max-width: 1150px) {
+      .bookmark_menu div{
+        order: 1;
+      }
+      .bookmark_menu .comment_block{
+        order: 0;
+        width: 100%;
+      }
+
+}

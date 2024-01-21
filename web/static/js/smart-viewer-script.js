@@ -50,7 +50,7 @@ function loadGroup(elem){
     console.log(elem);
     SendRequest('get',
                 '/get_group',
-                `threshold=${threshold_input.value}&origin_photo_id=${elem.dataset.origin_photoId}&origin_face_id=${elem.dataset.origin_faceId}&origin_photo_title=${elem.dataset.origin_photoTitle}&origin_photo_docs=${elem.dataset.origin_photoDocs}&origin_photo_x1=${elem.dataset.origin_photoX1}&origin_photo_y1=${elem.dataset.origin_photoY1}&origin_photo_x2=${elem.dataset.origin_photoX2}&origin_photo_y2=${elem.dataset.origin_photoY2}`,
+                `threshold=${threshold_input.value}&origin_photo_id=${elem.dataset.origin_photoId}&origin_face_id=${elem.dataset.origin_faceId}&origin_photo_title=${elem.dataset.origin_photoTitle}&origin_photo_docs=${elem.dataset.origin_photoDocs}&origin_face_x1=${elem.dataset.origin_faceX1}&origin_face_y1=${elem.dataset.origin_faceY1}&origin_face_x2=${elem.dataset.origin_faceX2}&origin_face_y2=${elem.dataset.origin_faceY2}`,
                 (Request) => {
                     let data = JSON.parse(Request.response);
                     console.log(data);
@@ -222,33 +222,37 @@ add_bookmark_btn.onclick = addBookmark;
 function addBookmark(){
     let active_group = document.querySelector('.group_li.active');
     let origin_photo = {"photo_id": active_group.dataset.origin_photoId,
-    "x1": active_group.dataset.origin_photoX1,
-    "y1": active_group.dataset.origin_photoY1,
-    "x2": active_group.dataset.origin_photoX2,
-    "y2": active_group.dataset.origin_photoY2,
+    "x1": active_group.dataset.origin_faceX1,
+    "y1": active_group.dataset.origin_faceY1,
+    "x2": active_group.dataset.origin_faceX2,
+    "y2": active_group.dataset.origin_faceY2,
     "photo_title": active_group.dataset.origin_photoTitle,
     "docs": active_group.dataset.origin_photoDocs};
 
     let similar_photos = []
     for(let i = 0; i < checkedPhotoList.length; i++){
         similar_photos.push({"photo_id": checkedPhotoList[i].dataset.photoId,
-        "x1": checkedPhotoList[i].dataset.photoX1,
-        "y1": checkedPhotoList[i].dataset.photoY1,
-        "x2": checkedPhotoList[i].dataset.photoX2,
-        "y2": checkedPhotoList[i].dataset.photoY2,
+        "x1": checkedPhotoList[i].dataset.faceX1,
+        "y1": checkedPhotoList[i].dataset.faceY1,
+        "x2": checkedPhotoList[i].dataset.faceX2,
+        "y2": checkedPhotoList[i].dataset.faceY2,
         "photo_title": checkedPhotoList[i].dataset.photoTitle,
         "docs": checkedPhotoList[i].dataset.photoDocs});
     }
+    let comment_textarea = document.getElementById('comment_textarea');
+    bookmark_comment = comment_textarea.value;
     
     SendRequest('get',
                 '/add_bookmark',
-                `origin_photo=${JSON.stringify(origin_photo)}&similar_photos=${JSON.stringify(similar_photos)}`,
+                `origin_photo=${JSON.stringify(origin_photo)}&similar_photos=${JSON.stringify(similar_photos)}
+                &bookmark_comment=${JSON.stringify(bookmark_comment)}`,
                 (Request) => {
                     let data = JSON.parse(Request.response);
                     console.log(data);
                     if(data['status']=='ok'){
                         for(let i = 0; i < checkedPhotoList.length; i++){
                             checkedPhotoList[i].className += ' bookmarked';
+                            addCommentBlock(checkedPhotoList[i]);
                         }
                     }
                     closeBookmarkMenu()
@@ -261,20 +265,20 @@ function deleteBookmark(){
     console.log('DELETE BOOKMARK')
     let active_group = document.querySelector('.group_li.active');
     let origin_photo = {"photo_id": active_group.dataset.origin_photoId,
-    "x1": active_group.dataset.origin_photoX1,
-    "y1": active_group.dataset.origin_photoY1,
-    "x2": active_group.dataset.origin_photoX2,
-    "y2": active_group.dataset.origin_photoY2,
+    "x1": active_group.dataset.origin_faceX1,
+    "y1": active_group.dataset.origin_faceY1,
+    "x2": active_group.dataset.origin_faceX2,
+    "y2": active_group.dataset.origin_faceY2,
     "photo_title": active_group.dataset.origin_photoTitle,
     "docs": active_group.dataset.origin_photoDocs};
 
     let similar_photos = []
     for(let i = 0; i < checkedPhotoList.length; i++){
         similar_photos.push({"photo_id": checkedPhotoList[i].dataset.photoId,
-        "x1": checkedPhotoList[i].dataset.photoX1,
-        "y1": checkedPhotoList[i].dataset.photoY1,
-        "x2": checkedPhotoList[i].dataset.photoX2,
-        "y2": checkedPhotoList[i].dataset.photoY2,
+        "x1": checkedPhotoList[i].dataset.faceX1,
+        "y1": checkedPhotoList[i].dataset.faceY1,
+        "x2": checkedPhotoList[i].dataset.faceX2,
+        "y2": checkedPhotoList[i].dataset.faceY2,
         "photo_title": checkedPhotoList[i].dataset.photoTitle,
         "docs": checkedPhotoList[i].dataset.photoDocs});
     }
@@ -288,6 +292,7 @@ function deleteBookmark(){
                     if(data['status']=='ok'){
                         for(let i = 0; i < checkedPhotoList.length; i++){
                             checkedPhotoList[i].className = checkedPhotoList[i].className.replace(' bookmarked', '');
+                            deleteCommentBlock(checkedPhotoList[i]);
                         }
                     }
                     closeBookmarkMenu()

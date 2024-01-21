@@ -30,10 +30,10 @@
                             data-origin_face-id="{{ groups[i]['face']['id'] }}"
                             data-origin_photo-title="{{ groups[i]['photo']['title'] }}"
                             data-origin_photo-docs="{% for doc in groups[i]['photo']['docs']%}{{ doc['id'] }} {% endfor %}"
-                            data-origin_photo-x1="{{groups[i]['face']['x1']}}"
-                            data-origin_photo-y1="{{groups[i]['face']['y1']}}"
-                            data-origin_photo-x2="{{groups[i]['face']['x2']}}"
-                            data-origin_photo-y2="{{groups[i]['face']['y2']}}"
+                            data-origin_face-x1="{{groups[i]['face']['x1']}}"
+                            data-origin_face-y1="{{groups[i]['face']['y1']}}"
+                            data-origin_face-x2="{{groups[i]['face']['x2']}}"
+                            data-origin_face-y2="{{groups[i]['face']['y2']}}"
                             >
                                 <p>Группа {{i+1}} {{ groups[i]['photo']['title']|truncate(20, True, '...', 0) if groups[i]['photo']['title'] }}</p>
     <!--                            <p>Количество фото в группе</p>-->
@@ -58,6 +58,9 @@
                     </button>
                     <span>Выбрано: </span>
                     <span id="checked-photo-count"></span>
+                </div>
+                <div class="comment_block">
+                    <textarea id="comment_textarea" rows="2"  placeholder="Комментарий к закладке"></textarea>
                 </div>
                 <div>
                     <button type="button" id="add-bookmark-btn" title="Добавить в закладки">

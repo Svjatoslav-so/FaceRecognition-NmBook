@@ -144,10 +144,10 @@ def get_group():
         origin_face_id = request.args.get('origin_face_id', None)
         origin_photo_title = request.args.get('origin_photo_title', None)
         origin_photo_docs = request.args.get('origin_photo_docs', None)
-        origin_photo_x1 = float(request.args.get('origin_photo_x1', 0))
-        origin_photo_y1 = float(request.args.get('origin_photo_y1', 0))
-        origin_photo_x2 = float(request.args.get('origin_photo_x2', 0))
-        origin_photo_y2 = float(request.args.get('origin_photo_y2', 0))
+        origin_face_x1 = float(request.args.get('origin_face_x1', 0))
+        origin_face_y1 = float(request.args.get('origin_face_y1', 0))
+        origin_face_x2 = float(request.args.get('origin_face_x2', 0))
+        origin_face_y2 = float(request.args.get('origin_face_y2', 0))
 
         print(origin_face_id, origin_photo_title, origin_photo_docs)
         if common_context()['dbs']:
@@ -160,10 +160,10 @@ def get_group():
                                                   **{'origin_photo_id': origin_photo_id,
                                                      'origin_photo_title': origin_photo_title,
                                                      'origin_photo_docs': origin_photo_docs,
-                                                     'origin_photo_x1': origin_photo_x1,
-                                                     'origin_photo_y1': origin_photo_y1,
-                                                     'origin_photo_x2': origin_photo_x2,
-                                                     'origin_photo_y2': origin_photo_y2,
+                                                     'origin_photo_x1': origin_face_x1,
+                                                     'origin_photo_y1': origin_face_y1,
+                                                     'origin_photo_x2': origin_face_x2,
+                                                     'origin_photo_y2': origin_face_y2,
                                                      'foto_with_face': get_foto_with_square_around_face}),
             'view_panel': render_template('view-panel.html',
                                           **{'group': group,
@@ -207,10 +207,12 @@ def add_bookmark():
     if request.method == 'GET':
         origin_photo = json.loads(request.args.get('origin_photo', None))
         similar_photos = json.loads(request.args.get('similar_photos', None))
+        bookmark_comment = json.loads(request.args.get('bookmark_comment', None))
         try:
             if origin_photo and similar_photos and common_context()['dbs']:
                 manager = ResultDBManager(BOOKMARKS_DB)
-                manager.add_bookmarks(origin=origin_photo, similar=similar_photos, db=get_db())
+                manager.add_bookmarks(origin=origin_photo, similar=similar_photos,
+                                      comment=f'{bookmark_comment}\nДобавлено в {get_db()}')
             return jsonify({"status": "ok"})
         except Exception as e:
             print('Error: ', e, '\n', traceback.format_exc())
@@ -274,6 +276,50 @@ def get_bookmark_group():
                                               **{'group': group,
                                                  'for_bookmark_view': True,
                                                  'foto_with_face': get_foto_with_square_around_face})
+            }
+        else:
+            result = {
+                'status': 'fail'
+            }
+        return jsonify(result)
+    return redirect(url_for('home'))
+
+
+@app.route("/get_comment")
+def get_comment():
+    if request.method == 'GET':
+        origin_photo_id = request.args.get('origin_photo_id', None)
+        origin_face_x1 = float(request.args.get('origin_face_x1', 0))
+        origin_face_y1 = float(request.args.get('origin_face_y1', 0))
+        origin_face_x2 = float(request.args.get('origin_face_x2', 0))
+        origin_face_y2 = float(request.args.get('origin_face_y2', 0))
+        print('origin_photo_id: ', origin_photo_id)
+        print('origin_face_x1: ', origin_face_x1)
+        print('origin_face_y1: ', origin_face_y1)
+        print('origin_face_x2: ', origin_face_x2)
+        print('origin_face_y2: ', origin_face_y2)
+
+        similar_photo_id = request.args.get('similar_photo_id', None)
+        similar_face_x1 = float(request.args.get('similar_face_x1', 0))
+        similar_face_y1 = float(request.args.get('similar_face_y1', 0))
+        similar_face_x2 = float(request.args.get('similar_face_x2', 0))
+        similar_face_y2 = float(request.args.get('similar_face_y2', 0))
+        print('similar_photo_id: ', similar_photo_id)
+        print('similar_face_x1: ', similar_face_x1)
+        print('similar_face_y1: ', similar_face_y1)
+        print('similar_face_x2: ', similar_face_x2)
+        print('similar_face_y2: ', similar_face_y2)
+
+
+        manager = ResultDBManager(BOOKMARKS_DB)
+        comment = manager.get_comment_for_bookmark(origin_photo_id, origin_face_x1, origin_face_y1, origin_face_x2,
+                                                   origin_face_y2, similar_photo_id, similar_face_x1, similar_face_y1,
+                                                   similar_face_x2, similar_face_y2)
+        print("Comment: ", comment, type(comment))
+        if comment:
+            result = {
+                'status': 'ok',
+                'comment': comment
             }
         else:
             result = {

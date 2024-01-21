@@ -4,15 +4,16 @@
         data-photo-id="{{ g['photo_id'] }}"
         data-photo-title="{{ g['photo_title'] }}"
         data-photo-docs="{{ g['docs'] }}"
-        data-photo-x1="{{ g['x1'] }}"
-        data-photo-y1="{{ g['y1'] }}"
-        data-photo-x2="{{ g['x2'] }}"
-        data-photo-y2="{{ g['y2'] }}">
+        data-face-x1="{{ g['x1'] }}"
+        data-face-y1="{{ g['y1'] }}"
+        data-face-x2="{{ g['x2'] }}"
+        data-face-y2="{{ g['y2'] }}">
             <div class="caption">
                 <p class="person_name">{{g['photo_id']|truncate(30)}}<br>{{g['photo_title']}}</p>
                 <p class="document_id">id: {{ g['docs'] }}</p>
             </div>
             <div class="f-panzoom">
+                <button class="comment_button" type="button" onclick="showComment(this, event)" title="Показать комментарий к закладке"></button>
                 <img class="f-panzoom__content" src="{{foto_with_face('static/out/photo/'+ g['photo_id'][0] +'/'+ g['photo_id'] +'.jpeg', (g['x1'], g['y1'], g['x2'], g['y2']))}}" alt="Схожее фото">
             </div>
         </div>
@@ -23,15 +24,18 @@
         data-photo-id="{{ g['photo']['id'] }}"
         data-photo-title="{{ g['photo']['title'] }}"
         data-photo-docs="{% for doc in g['photo']['docs']%}{{ doc['id'] }} {% endfor %}"
-        data-photo-x1="{{g['face']['x1']}}"
-        data-photo-y1="{{g['face']['y1']}}"
-        data-photo-x2="{{g['face']['x2']}}"
-        data-photo-y2="{{g['face']['y2']}}">
+        data-face-x1="{{g['face']['x1']}}"
+        data-face-y1="{{g['face']['y1']}}"
+        data-face-x2="{{g['face']['x2']}}"
+        data-face-y2="{{g['face']['y2']}}">
             <div class="caption">
                 <p class="person_name">{{g['photo']['id']|truncate(30)}}<br>{{g['photo']['title']}}</p>
                 <p class="document_id">id: {% for doc in g['photo']['docs'] %} {{ doc['id']}} {% endfor %}</p>
             </div>
             <div class="f-panzoom">
+                {% if g['is_bookmarked'] %}
+                <button class="comment_button" type="button" onclick="showComment(this, event)" title="Показать комментарий к закладке"></button>
+                {% endif %}
                 <img class="f-panzoom__content" src="{{foto_with_face('static/out/photo/'+ g['photo']['id'][0] +'/'+ g['photo']['id'] +'.jpeg', (g['face']['x1'], g['face']['y1'], g['face']['x2'], g['face']['y2']))}}" alt="Схожее фото">
             </div>
         </div>

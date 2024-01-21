@@ -177,10 +177,10 @@ function deleteBookmark(){
 
     let similar_photos = []
     similar_photos.push({"photo_id": target_photo.dataset.photoId,
-    "x1": target_photo.dataset.photoX1,
-    "y1": target_photo.dataset.photoY1,
-    "x2": target_photo.dataset.photoX2,
-    "y2": target_photo.dataset.photoY2,
+    "x1": target_photo.dataset.faceX1,
+    "y1": target_photo.dataset.faceY1,
+    "x2": target_photo.dataset.faceX2,
+    "y2": target_photo.dataset.faceY2,
     "photo_title": target_photo.dataset.photoTitle,
     "docs": target_photo.dataset.photoDocs});
     
